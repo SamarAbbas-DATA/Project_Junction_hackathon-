@@ -20,6 +20,11 @@ const {AssistantSearch}=await import('../src/assistant-search.js');
 const {ports,sourceNames}=await import('../src/config.js');
 const {generateDemoBatch,toCsv,validateDemoBatch}=await import('../src/demo-data.js');
 const {importDemoFile,watchDemoInbox}=await import('../src/demo-import.js');
+const {bootstrapMessages}=await import('../src/fhir-mapping.js');
+const {fhirChanges,startFhirSender}=await import('../src/fhir-source.js');
+const {receiveFhir,registerFhirIntake}=await import('../src/fhir-intake.js');
+const {replayCompletedDemo}=await import('../src/demo-replay.js');
+const {default:Fastify}=await import('fastify');
 
 function writeBatch(file:string,batch:ReturnType<typeof generateDemoBatch>) {
   const zip=new AdmZip();
@@ -54,7 +59,7 @@ test('source APIs and PostgreSQL hub preserve records, corrections and recovery'
     const connectionString=process.env.DATABASE_URL;
     if(connectionString){const url=new URL(connectionString);url.pathname='/'+database;pool=new pg.Pool({connectionString:url.toString()});}
     else pool=new pg.Pool({host:'127.0.0.1',port:55432,user:'amr_hub',database});
-    const hub=new HubStore(pool);await hub.initialize();await hub.sync();
+    const hub=new HubStore(pool);hub.initialMessages=source=>bootstrapMessages(stores[source]);await hub.initialize();await hub.sync();
     await t.test('snapshot import and source cursor are consistent',async()=>{
       assert.equal((await hub.overview()).totals.patients,1);
       const snapshot=stores.adt.snapshot();assert.equal(snapshot.cursor,2);assert.equal(snapshot.tables.patients.length,1);
@@ -65,7 +70,8 @@ test('source APIs and PostgreSQL hub preserve records, corrections and recovery'
       const data={patient_id:'PNEW',sex:'M',birth_year:1985,home_area:'North'};
       const first=await request('adt','/patients','POST',data,{'idempotency-key':'same-request'});assert.equal(first.status,201);patient=first.body;
       const retry=await request('adt','/patients','POST',data,{'idempotency-key':'same-request'});assert.equal(retry.status,200);
-      assert.equal((await request('adt','/events?since=2')).body.events.length,1);
+      const messages=(await request('adt','/fhir/changes?after=2')).body.messages;
+      assert.equal(messages.length,1);assert.equal(messages[0].resourceType,'Bundle');assert.equal(messages[0].entry[0].resource.resourceType,'MessageHeader');
       assert.equal((await request('adt','/patients','POST',{...data,home_area:'Other'},{'idempotency-key':'same-request'})).status,409);
       await hub.sync();assert.equal((await hub.overview()).totals.patients,2);
     });
@@ -241,12 +247,99 @@ test('source APIs and PostgreSQL hub preserve records, corrections and recovery'
       const ward=await search.search({mode:'ward',identifier:'ed',message:'Any pending samples?',include_prediction:false});assert.equal(ward.records.wards[0].record.ward_code,'ED');assert.ok(ward.records.wards[0].summary.pending>0);assert.ok(ward.records.wards[0].recent_samples.every((c:any)=>c.status!=='final'));assert.equal(ward.amr.length,0);
       const wrongWard=await search.search({message:'Summarize ward UNKNOWN',focus:ward.focus,include_prediction:false});assert.equal(wrongWard.missing[0].id,'UNKNOWN');assert.equal(wrongWard.records.wards.length,0);
       const general=await search.search({message:'How many samples are waiting?',include_prediction:false});assert.ok(general.records.overview.totals.cultures>0);assert.ok(general.records.pending_samples.length>0);
+      const finnishWard=await search.search({message:'Osastokoodi ED: mitkä näytteet odottavat tuloksia?',include_prediction:false});assert.deepEqual(finnishWard.focus.ward_codes,['ED']);assert.ok(finnishWard.records.wards[0].recent_samples.every((c:any)=>c.status!=='final'));
+      const finnishGeneral=await search.search({message:'Mitkä viljelyt ovat kesken? Näytä myös herkkyystiedot.',include_prediction:false});assert.ok(finnishGeneral.records.pending_samples.length>0);assert.ok(finnishGeneral.records.antibiogram);
+      const finnishMissing=await search.search({message:'Potilastunnus UNKNOWN: tee yhteenveto',focus:patient.focus,include_prediction:false});assert.equal(finnishMissing.missing[0].id,'UNKNOWN');assert.equal(finnishMissing.records.patients.length,0);
       assert.equal((await search.search({message:"' OR 1=1; DROP TABLE adt.patients --",include_prediction:false})).records.patients.length,0);
       const model=await search.search({mode:'culture',identifier:'CTEST',message:'Summarize the AMR context'});assert.equal(model.amr[0].status,'available');assert.equal(model.amr[0].inputs.known_results.Ampicillin,'S');assert.ok(model.amr[0].model_id);
       assert.equal((await request('lis','/ast/ITEST~AMP','PATCH',{result:'R'},{'if-match':'2'})).status,200);await hub.sync();
       const updated=await search.search({message:'CTEST AMR context'});assert.equal(updated.records.cultures[0].isolates[0].ast[0][1],'R');assert.equal(updated.amr[0].inputs.known_results.Ampicillin,'R');
       stores.lis.insert('cultures',{culture_id:'CWOUND',patient_id:'PTEST',ward_code:'ED',admission_date:null,sample_date:'2026-10-18',specimen:'wound',age_years:46,status:'registered',n_isolates:0,result:null});
       await hub.sync();const wound=await search.search({message:'CWOUND'});assert.equal(wound.amr[0].status,'unsupported');assert.match(wound.amr[0].reason,/wound/);
+    });
+    await t.test('the running inbox defaults to 30 seconds and applies that interval to paused feeds',async()=>{
+      const previous=process.env.SYNTHETIC_IMPORT_INTERVAL_MS;delete process.env.SYNTHETIC_IMPORT_INTERVAL_MS;
+      const inbox=path.join(directory,'thirty-second-inbox'),receipts=path.join(directory,'thirty-second-receipts');fs.mkdirSync(inbox);
+      const batch=generateDemoBatch(3,'2026-10-17'),file=path.join(inbox,'thirty.zip');writeBatch(file,batch);
+      let first:any;const progress=new Promise<void>(resolve=>{first=resolve;});
+      const watcher=watchDemoInbox(inbox,receipts,{onProgress:()=>first()});
+      try{assert.equal(watcher.intervalMs,30000);await progress;await watcher.stop();assert.equal(await countBatchPatients(batch,request),1);
+        const receipt=JSON.parse(fs.readFileSync(path.join(receipts,fs.readdirSync(receipts).find(n=>n.endsWith('.json'))!),'utf8'));assert.equal(receipt.progress.interval_ms,30000);assert.equal(receipt.status,'paused');assert.ok(Date.parse(receipt.progress.next_tick_at)>Date.now()+25000);
+        const controller=new AbortController();controller.abort();await importDemoFile(file,receipts,{intervalMs:45000,useCurrentInterval:true,signal:controller.signal});
+        const changed=JSON.parse(fs.readFileSync(path.join(receipts,fs.readdirSync(receipts).find(n=>n.endsWith('.json'))!),'utf8'));assert.equal(changed.progress.interval_ms,45000);assert.equal(await countBatchPatients(batch,request),1);
+      }finally{await watcher.stop();if(previous===undefined)delete process.env.SYNTHETIC_IMPORT_INTERVAL_MS;else process.env.SYNTHETIC_IMPORT_INTERVAL_MS=previous;}
+    });
+    await t.test('FHIR intake saves originals, resists duplicates and older versions, and rejects changes atomically',async()=>{
+      await hub.sync();
+      const initial=(await pool!.query('SELECT count(*)::integer AS n FROM adt.patients')).rows[0].n;
+      stores.adt.insert('patients',{patient_id:'PFHIR',sex:'F',birth_year:1991,home_area:'Original'});
+      const cursor=stores.adt.snapshot().cursor-1,first=fhirChanges(stores.adt,cursor).messages[0];
+      const received=await receiveFhir(hub,'adt',first);assert.equal(received.applied,1);
+      assert.equal((await receiveFhir(hub,'adt',first)).duplicate,true);
+      assert.equal((await receiveFhir(hub,'adt',Object.fromEntries(Object.entries(first).reverse()))).duplicate,true);
+      stores.adt.update('patients','PFHIR',{home_area:'Corrected'},1);
+      const correction=fhirChanges(stores.adt,cursor+1).messages[0];await receiveFhir(hub,'adt',correction);
+      // A different delivery ID cannot make the previous resource version current.
+      const old=structuredClone(first);old.identifier.value='redelivered-old-version';
+      assert.equal((await receiveFhir(hub,'adt',old)).applied,0);
+      assert.equal((await hub.record('adt','patients','PFHIR')).home_area,'Corrected');
+      assert.equal((await pool!.query('SELECT count(*)::integer AS n FROM adt.patients')).rows[0].n,initial+1);
+      const conflict=structuredClone(first);conflict.timestamp='2026-01-01T00:00:00Z';await assert.rejects(()=>receiveFhir(hub,'adt',conflict),/different content/);
+      const invalid=structuredClone(correction);invalid.identifier.value='invalid-fhir-message';invalid.entry.push({resource:{resourceType:'Observation',id:'unsupported'}});
+      await assert.rejects(()=>receiveFhir(hub,'adt',invalid),/not supported/);
+      const saved=(await pool!.query("SELECT status,bundle FROM integration_inbox WHERE source='adt' AND message_id='invalid-fhir-message'")).rows[0];assert.equal(saved.status,'rejected');assert.deepEqual(saved.bundle,invalid);
+      assert.equal((await hub.record('adt','patients','PFHIR')).home_area,'Corrected');
+      const lab=await request('lis','/fhir/changes?after=0&limit=500');assert.equal(lab.status,200);
+      const amended=lab.body.messages.flatMap((b:any)=>b.entry.map((e:any)=>e.resource)).find((r:any)=>r.resourceType==='Observation'&&r.status==='corrected');assert.ok(amended);
+      const final=stores.lis.db.prepare("SELECT * FROM cultures WHERE status='final' AND result='positive' LIMIT 1").get() as any,labCursor=stores.lis.snapshot().cursor;
+      stores.lis.update('cultures',final.culture_id,{sample_date:final.sample_date},final.record_version);
+      const correctedReport=fhirChanges(stores.lis,labCursor).messages[0];assert.ok(correctedReport.entry.some((e:any)=>e.resource.resourceType==='DiagnosticReport'&&e.resource.status==='corrected'));
+      await receiveFhir(hub,'lis',correctedReport);assert.equal((await hub.record('lis','cultures',final.culture_id)).status,'final');
+      assert.equal((await request('adt','/snapshot')).status,404);assert.equal((await request('adt','/events')).status,404);
+      await hub.sync();
+    });
+    await t.test('per-source sender pushes immediately and catches up after intake downtime',async()=>{
+      await hub.sync();const endpoint=Fastify();registerFhirIntake(endpoint,hub);await endpoint.listen({host:'127.0.0.1',port:0});
+      const address=endpoint.server.address();assert.ok(address&&typeof address!=='string');
+      const url=`http://127.0.0.1:${address.port}/api/intake/fhir`,before=stores.adt.snapshot().cursor,sender=startFhirSender(stores.adt,url,before);
+      const wait=async(fn:()=>Promise<boolean>)=>{const deadline=Date.now()+5000;while(!(await fn())){assert.ok(Date.now()<deadline,'FHIR delivery timed out');await new Promise(r=>setTimeout(r,20));}};
+      try{
+        stores.adt.insert('patients',{patient_id:'PPUSH',sex:'M',birth_year:1982,home_area:'Push'});
+        await wait(async()=>!!(await pool!.query("SELECT 1 FROM adt.patients WHERE patient_id='PPUSH'")).rowCount&&sender.cursor===before+1);
+        assert.equal((await pool!.query("SELECT last_event_id FROM sync_cursors WHERE source='adt'")).rows[0].last_event_id,String(before));
+        assert.equal(sender.cursor,before+1);
+      }finally{await sender.stop();await endpoint.close();}
+      // The hub was down while this source commit occurred. A replacement
+      // sender uses the durable outbox, without relying on a new database write.
+      stores.adt.insert('patients',{patient_id:'PCATCHUP',sex:'F',birth_year:1978,home_area:'Catch-up'});
+      const recovered=Fastify();registerFhirIntake(recovered,hub);await recovered.listen({host:'127.0.0.1',port:0});const next=recovered.server.address();assert.ok(next&&typeof next!=='string');
+      const retry=startFhirSender(stores.adt,`http://127.0.0.1:${next.port}/api/intake/fhir`,before);
+      try{await wait(async()=>!!(await pool!.query("SELECT 1 FROM adt.patients WHERE patient_id='PCATCHUP'")).rowCount);}finally{await retry.stop();await recovered.close();}
+      await hub.sync();assert.equal(hub.sourceStatus.adt.cursor,stores.adt.snapshot().cursor);
+    });
+    await t.test('completed inbox cycles reset only feed-owned patients and restart without losing manual records',async()=>{
+      const inbox=path.join(directory,'cycle-inbox'),receipts=path.join(directory,'cycle-receipts');fs.mkdirSync(inbox);
+      const batch=generateDemoBatch(5,'2026-10-17'),file=path.join(inbox,'cycle.zip');writeBatch(file,batch);
+      await importDemoFile(file,receipts);await hub.sync();
+      const extra=generateDemoBatch(3,'2026-10-17'),extraFile=path.join(inbox,'extra.zip');writeBatch(extraFile,extra);
+      const cursor=stores.adt.snapshot().cursor;
+      assert.equal(replayCompletedDemo(stores,directory,inbox,receipts).reset,false);assert.equal(stores.adt.snapshot().cursor,cursor);
+      const controller=new AbortController();await importDemoFile(extraFile,receipts,{intervalMs:10,signal:controller.signal,onProgress:()=>controller.abort()});
+      assert.equal(replayCompletedDemo(stores,directory,inbox,receipts).reset,false);assert.equal(await countBatchPatients(extra,request),1);
+      await importDemoFile(extraFile,receipts,{intervalMs:10});
+      // A manually added culture protects this generated patient's entire graph.
+      const protectedId=batch.tables.patients[0].patient_id;
+      assert.equal((await request('lis','/cultures','POST',{culture_id:'CMANUAL',patient_id:protectedId,ward_code:'ED',admission_date:null,age_years:2026-batch.tables.patients[0].birth_year,sample_date:'2026-10-17',specimen:'urine',n_isolates:0,status:'registered',result:null},{'idempotency-key':'manual-culture'})).status,201);
+      const refs=stores.formulary.list('antibiotics').total,original=(await hub.overview()).totals.patients;
+      const reset=replayCompletedDemo(stores,directory,inbox,receipts);assert.equal(reset.reset,true);assert.equal(reset.patients,7);assert.equal(reset.protected_patients,1);assert.ok(reset.backup&&fs.existsSync(path.join(reset.backup,'plan.json')));
+      assert.equal(await countBatchPatients(batch,request),1);assert.equal(await countBatchPatients(extra,request),0);
+      assert.ok(stores.adt.get('patients','PTEST'));assert.ok(stores.adt.get('patients','PPUSH'));assert.ok(stores.lis.get('cultures','CMANUAL'));assert.equal(stores.formulary.list('antibiotics').total,refs);
+      await hub.sync();assert.equal(await hub.patientHistory(extra.tables.patients[0].patient_id),null);
+      assert.equal(replayCompletedDemo(stores,directory,inbox,receipts).reset,false);
+      const restarted=await importDemoFile(file,receipts,{intervalMs:10});assert.equal(restarted.status,'completed');assert.ok(restarted.created>0);
+      await importDemoFile(extraFile,receipts,{intervalMs:10});await hub.sync();assert.equal(await countBatchPatients(batch,request),5);assert.equal(await countBatchPatients(extra,request),3);
+      assert.equal((await hub.overview()).totals.patients,original+3); // extra's three finished after the saved hub count
+      assert.ok(stores.lis.get('cultures','CMANUAL'));assert.equal(stores.formulary.list('antibiotics').total,refs);
     });
   }finally{
     for(const app of apps)await app.close();Object.values(stores).forEach(s=>s.close());

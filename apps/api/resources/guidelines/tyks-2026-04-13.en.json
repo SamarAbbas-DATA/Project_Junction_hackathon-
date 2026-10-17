@@ -1,0 +1,299 @@
+{
+  "source": {
+    "id": "tyks-antimicrobial-2026-04-13",
+    "title": "TYKS regional antimicrobial recommendations",
+    "original_title": "Mikrobilääkesuositus",
+    "edition_date": "2026-04-13",
+    "page_count": 69,
+    "authors": "Infectious disease physicians at TYKS, Satasairaala and Vaasa Central Hospital, with other specialties (p. 6).",
+    "original_language": "Finnish",
+    "context_language": "English",
+    "translation_status": "Selected English translation and summary; not an official or clinically reviewed translation.",
+    "coverage": "Sampling, diagnostic assessment, susceptibility interpretation and antimicrobial stewardship, with selected treatment principles. Full dosing tables and complete treatment regimens are not transcribed.",
+    "source_url": "/api/assistant/guidelines/tyks/source.pdf",
+    "english_url": "/api/assistant/guidelines/tyks",
+    "sha256": "33be48fa54a8fc269f7d95d26dc3c37a7a5147bbb299f6e9e17dbb17e6af77c7",
+    "currency": "The supplied PDF edition is used; it is not automatically refreshed or verified as the latest publisher version."
+  },
+  "scope": {
+    "pages": [6],
+    "population": "General hospital antimicrobial guidance for adults; not a pediatric antimicrobial treatment guideline.",
+    "organ_function": "The source's doses assume normal renal and hepatic function; patient-specific adjustment and interaction checks are separate requirements.",
+    "specialist_review": "The guide does not replace infectious diseases consultation; it recommends early consultation for immunocompromised patients.",
+    "historical_tables": "The susceptibility percentages on p. 8 describe TYKS isolates from 2021. The dosing interpretation table cites EUCAST version 11.0 on p. 18. Neither is a current breakpoint table or live hospital antibiogram.",
+    "not_covered_here": "This English context does not reproduce laboratory SOPs, disk-diffusion/MIC procedures, current numeric breakpoints, full dose schedules or all non-bacterial chapters."
+  },
+  "sections": [
+    {
+      "id": "before-antibiotics", "title": "Assessment and sampling before antibiotics", "pages": [7], "core": true,
+      "keywords": ["before antibiotics", "sampling", "sample collection", "diagnosis", "diagnostic", "resistance risk"],
+      "facts": [
+        "Identify the likely infection focus and organisms, distinguishing community-onset from healthcare-associated infection.",
+        "Review relevant resistant organisms in risk information and cultures from at least the preceding year, antimicrobials in the preceding 3 months, hospitalization abroad in 12 months, and travel in Asia or Africa in 6 months.",
+        "Collect focus-appropriate cultures before starting antibiotics, such as urine, blood or material from the infection site. Sampling must not delay antibiotics in a septic patient.",
+        "Check antibiotic allergy history, kidney and liver function, and medication interactions before choosing treatment."
+      ]
+    },
+    {
+      "id": "reassessment", "title": "Review and target treatment after 48-72 hours", "pages": [7], "core": true,
+      "keywords": ["48", "72", "review", "de-escalation", "narrow spectrum", "crp", "response", "stop antibiotics"],
+      "facts": [
+        "Reassess clinical response, infection focus and culture results within 48-72 hours; aim for the narrowest effective treatment and stop antibiotics if the presumed infection is not present.",
+        "Document the treatment indication or working diagnosis, update it as the diagnosis becomes clearer, and record the planned duration.",
+        "Clinical response and inflammatory-marker timing matter: CRP may only start falling on treatment day 3-4. A single culture or biomarker does not replace clinical assessment."
+      ]
+    },
+    {
+      "id": "susceptibility", "title": "Interpreting S, I and R", "pages": [15,16,17,18], "core": true,
+      "keywords": ["s/r", "s i r", "susceptibility", "susceptible", "resistant", "increased exposure", "intermediate", "ast", "eucast", "breakpoint", "mic", "disk diffusion"],
+      "facts": [
+        "S means susceptible at standard exposure or dosing. I means susceptible with increased exposure, achieved through an appropriately higher or more frequent dose depending on the drug. R means resistant.",
+        "I must not be translated as resistant or as the older intermediate category. The source notes some organism-drug combinations are reported only as I or R.",
+        "Interpret treatment options using the reported susceptibility, organism, infection site and organ function. The source's dosing table assumes normal renal function and cites EUCAST v11.0; it does not establish today's numeric breakpoints."
+      ]
+    },
+    {
+      "id": "historical-susceptibility", "title": "Historical susceptibility percentages", "pages": [8,18],
+      "keywords": ["annual", "yearly", "percentage", "percent", "2021", "antibiogram", "historical", "current breakpoint", "zone diameter"],
+      "facts": [
+        "The spectrum table reports susceptible proportions from TYKS Clinical Microbiology in 2021, intended to help empirical choices when an organism is known but individual susceptibility is pending.",
+        "These historical proportions are not a patient's measured result, a model prediction, the dashboard's current synthetic antibiogram or evidence of present-day coverage. Verify a current laboratory standard separately for breakpoint or testing-method questions."
+      ]
+    },
+    {
+      "id": "gram-stain", "title": "Preliminary blood-culture Gram stain", "pages": [9],
+      "keywords": ["gram stain", "gram positive", "gram negative", "gram-negative", "gram-positive", "diplococci", "rods", "preliminary blood"], "specimens": ["blood"],
+      "facts": [
+        "Gram-negative rods can include E. coli, Klebsiella, Pseudomonas, Salmonella and other Enterobacterales; Gram-negative diplococci suggest meningococcus.",
+        "Gram-positive cocci may represent streptococci, pneumococci, enterococci or staphylococci depending on morphology. Gram-positive rods can include Listeria and organisms that may be contaminants.",
+        "These are preliminary possibilities, not a definitive species identification. Use the final identification and susceptibility as soon as available, alongside the infection focus and source-control assessment."
+      ]
+    },
+    {
+      "id": "staphylococcus-blood", "title": "Staphylococcus aureus in blood cultures", "pages": [12,13],
+      "keywords": ["staphylococcus aureus", "s. aureus", "s aureus", "mssa", "mrsa", "persistent bacteremia"], "organisms": ["Staphylococcus aureus"],
+      "facts": [
+        "S. aureus bloodstream infection requires infectious diseases consultation, follow-up blood cultures until clearance, assessment of the primary focus and deep infection, and echocardiography to exclude endocarditis.",
+        "The source distinguishes oxacillin-susceptible S. aureus, for which cloxacillin is listed, from MRSA, for which vancomycin and specialist-selected alternatives are discussed. These are guideline options, not proof of susceptibility in an individual isolate.",
+        "Reassess treatment when susceptibility becomes available. Rifampicin and fusidic acid must not be used alone because resistance develops readily."
+      ]
+    },
+    {
+      "id": "contamination", "title": "Possible blood-culture contamination", "pages": [9,13,14],
+      "keywords": ["contamination", "contaminant", "coagulase negative", "coagulase-negative", "staphylococcus epidermidis", "cutibacterium", "corynebacterium", "bacillus", "catheter"],
+      "organisms": ["Staphylococcus epidermidis", "Cutibacterium", "Corynebacterium", "Bacillus"],
+      "facts": [
+        "Coagulase-negative staphylococci, Cutibacterium, coryneforms and Bacillus may represent contamination, but coagulase-negative staphylococci may also cause catheter or foreign-body infection.",
+        "Interpret the organism with the clinical situation, repeat cultures and device information; do not automatically dismiss the finding. The guide recommends a low threshold for infectious diseases consultation for Gram-positive rod findings."
+      ]
+    },
+    {
+      "id": "enterobacterales-ampc", "title": "Enterobacterales and inducible resistance", "pages": [10,17,18],
+      "keywords": ["ampc", "enterobacter", "serratia", "citrobacter freundii", "klebsiella aerogenes", "ceftriaxone resistance", "cefuroxime resistance"],
+      "organisms": ["Enterobacter cloacae", "Serratia marcescens", "Citrobacter freundii", "Klebsiella aerogenes"],
+      "facts": [
+        "The guide highlights Enterobacter cloacae, Serratia marcescens, Citrobacter freundii and Klebsiella aerogenes as generally cefuroxime resistant, with possible development of ceftriaxone resistance during treatment because of AmpC.",
+        "Susceptibility-guided options discussed include cefepime, ertapenem or meropenem, and piperacillin-tazobactam in less severe infections. Clinical severity, infection focus and organ function remain relevant.",
+        "A conflict between a recorded result and an expected organism pattern calls for microbiology review; this guidance must not overwrite a measured laboratory result."
+      ]
+    },
+    {
+      "id": "multidrug-resistance", "title": "ESBL, CPE, MRSA and VRE findings", "pages": [10,12,13],
+      "keywords": ["esbl", "cpe", "carbapenemase", "vre", "mrsa", "multidrug", "multi-resistant", "carbapenem resistant"],
+      "facts": [
+        "The guide treats ESBL, CPE, MRSA and VRE as clinically and infection-control relevant findings; CPE and VRE require infectious diseases consultation, and MRSA bloodstream infection also requires specialist input.",
+        "For systemic ESBL infection, carbapenem options are discussed; meropenem is selected instead of ertapenem when Pseudomonas coverage is needed or albumin is below 25 g/L. This does not make every ESBL-positive urine culture an indication for a carbapenem.",
+        "Select treatment from the actual susceptibility and infection context. Resistance to one antibiotic alone does not establish an ESBL, CPE, MRSA or VRE diagnosis."
+      ]
+    },
+    {
+      "id": "pseudomonas", "title": "Pseudomonas aeruginosa", "pages": [10,64],
+      "keywords": ["pseudomonas", "antipseudomonal", "ertapenem"], "organisms": ["Pseudomonas aeruginosa"],
+      "facts": [
+        "The guide recommends infectious diseases consultation and susceptibility-based antipseudomonal treatment. Once susceptibility is known, a single active beta-lactam usually suffices; severe sepsis or neutropenia may require a different initial approach.",
+        "Ertapenem does not cover Pseudomonas or enterococci. A carbapenem name or a model ranking is not sufficient evidence of antipseudomonal activity.",
+        "Aminoglycoside use requires attention to drug levels and kidney function."
+      ]
+    },
+    {
+      "id": "enterococci", "title": "Species-specific enterococcal interpretation", "pages": [8,12],
+      "keywords": ["enterococcus", "enterococci", "faecalis", "faecium", "gallinarum", "vancomycin resistant"], "organisms": ["Enterococcus"],
+      "facts": [
+        "The source distinguishes E. faecalis, E. faecium and E. gallinarum. Ampicillin is discussed for susceptible E. faecalis; resistant or allergy situations require alternative assessment.",
+        "Vancomycin is not an option for E. gallinarum in this guide. VRE requires susceptibility-guided specialist advice. Persistent fever raises the question of endocarditis.",
+        "The historical p. 8 table distinguishes imipenem from meropenem for E. faecalis; these drugs must not be treated as interchangeable."
+      ]
+    },
+    {
+      "id": "sepsis", "title": "Suspected sepsis and urgent sampling", "pages": [7,19,20,21],
+      "keywords": ["sepsis", "septic", "septic shock", "qsofa", "organ dysfunction", "lactate"],
+      "facts": [
+        "Sepsis involves infection with organ dysfunction; a positive blood culture is not required. The source discusses bedside deterioration signs and urgent assessment, treatment and source control.",
+        "Obtain blood cultures promptly, but do not delay urgent treatment while waiting for other investigations or sampling. Revise empirical therapy as culture results become available.",
+        "Empirical choices depend on infection focus, healthcare association, resistance history and immune status. A blood-culture result alone cannot determine whether a patient has sepsis."
+      ]
+    },
+    {
+      "id": "neutropenic-fever", "title": "Fever in a neutropenic patient", "pages": [23,24,25],
+      "keywords": ["neutropenia", "neutropenic", "mascc", "chemotherapy", "immunocompromised", "immunosuppressed"],
+      "facts": [
+        "Clinical examination and blood cultures precede antimicrobial treatment where possible; additional imaging and microbiological investigations must not delay starting treatment.",
+        "Risk assessment considers the depth and expected duration of neutropenia, general condition, prior antimicrobials and resistant-organism carriage. Clinical risk scores require their actual inputs.",
+        "The guide separates low- and high-risk pathways and recommends specialist input for severe illness or difficult-to-treat organisms; a ward code is not evidence of neutropenia."
+      ]
+    },
+    {
+      "id": "urinary-infection", "title": "Cystitis, pyelonephritis and prostatitis", "pages": [37,38],
+      "keywords": ["urine", "urinary", "uti", "cystitis", "pyelonephritis", "prostatitis", "nitrofurantoin", "pivmecillinam", "bacteriuria"], "specimens": ["urine"],
+      "facts": [
+        "The guide has separate pathways for uncomplicated female cystitis, pregnancy-associated cystitis or bacteriuria, recurrent infection, pyelonephritis, and male febrile or afebrile infections. A urine isolate does not determine which syndrome is present.",
+        "For uncomplicated female cystitis it lists trimethoprim, nitrofurantoin or pivmecillinam; ESBL cystitis options depend on susceptibility and include nitrofurantoin, fosfomycin or higher-exposure pivmecillinam.",
+        "Pyelonephritis and febrile male infections need a separate assessment. Nitrofurantoin must not be used when prostatitis is suspected. Final selection is based on susceptibility and the clinical syndrome.",
+        "Pregnancy and asymptomatic bacteriuria require their own clinical assessment; pregnancy status and urinary symptoms cannot be assumed from this project's microbiology records."
+      ]
+    },
+    {
+      "id": "chronic-wounds", "title": "Colonization versus chronic wound infection", "pages": [26,27],
+      "keywords": ["wound", "chronic wound", "colonization", "colonisation", "cellulitis", "erysipelas", "skin infection"], "specimens": ["wound"],
+      "facts": [
+        "Chronic wound surfaces are almost always colonized. Antibiotics are not needed when there is no wound infection; a positive surface culture alone does not establish tissue infection.",
+        "Obtain cultures before treatment in moderate or severe infections, and in mild infection when recurrent, after substantial previous antibiotics or with known MRSA carriage.",
+        "Assess severity, depth, surrounding inflammation, systemic findings and possible bone or foreign-body involvement. Review recent culture findings and the need for drainage or surgery."
+      ]
+    },
+    {
+      "id": "postoperative-wounds", "title": "Postoperative infection and abscess sampling", "pages": [27,28],
+      "keywords": ["postoperative", "surgical wound", "surgical site", "post-surgical", "abscess", "pvl", "recurrent abscess"],
+      "facts": [
+        "Contact the operating unit before starting antibiotics for a suspected surgical wound infection; revision or drainage and microbiological sampling are central.",
+        "For suspected prosthetic-joint infection, obtain aspirate or operative cultures before antibiotics unless the patient is septic.",
+        "Abscess drainage is often the most important treatment. Obtain pus culture if starting an antibiotic; recurrent abscesses warrant consideration of MRSA and the source's StauPVL test."
+      ]
+    },
+    {
+      "id": "necrotizing-infection", "title": "Necrotizing soft-tissue infection", "pages": [29,30],
+      "keywords": ["necrotizing", "necrotising", "fasciitis", "fournier", "gas gangrene", "vibrio", "aeromonas"],
+      "facts": [
+        "Rapid surgical assessment and sufficiently extensive debridement are essential; other interventions must not delay necessary surgery.",
+        "At revision, obtain tissue for urgent Gram stain and bacterial culture, notify the laboratory of the suspicion, and obtain blood cultures. If antibiotics were already given, also obtain tissue for bacterial nucleic-acid testing.",
+        "The source discusses streptococcal, clostridial and mixed infections, with exposure-related organisms after seawater or freshwater injuries. These diagnoses require clinical findings and exposure history."
+      ]
+    },
+    {
+      "id": "respiratory-infection", "title": "Pneumonia and pleural infection", "pages": [32,33,34],
+      "keywords": ["pneumonia", "respiratory", "sputum", "empyema", "pleural", "bronchoscopy", "bal"],
+      "facts": [
+        "Different pathways apply to community-onset, hospital-acquired, ICU-level and immunocompromised pneumonia. Review previous sputum isolates and antimicrobials in chronic lung disease.",
+        "For immunocompromised pneumonia the source recommends infectious diseases consultation, bronchoscopy and infection-focused bronchoalveolar lavage investigations.",
+        "Pleural empyema requires drainage or surgical evaluation and treatment directed by cultures obtained during drainage; drainage is decisive."
+      ]
+    },
+    {
+      "id": "enteric-infection", "title": "Bacterial diarrhoea and EHEC", "pages": [35,36,37],
+      "keywords": ["diarrhoea", "diarrhea", "ehec", "shiga", "bloody stool", "campylobacter", "salmonella", "shigella", "yersinia", "gastroenteritis"],
+      "facts": [
+        "The guide advises considering EHEC in bloody diarrhoea and does not recommend routine antibiotics for EHEC because of the risk of a worse outcome; a septic presentation requires separate urgent clinical management.",
+        "Mild or improving Campylobacter infection, mild non-typhoidal Salmonella enteritis and mild Yersinia diarrhoea often do not need antibiotics; severity and patient risk factors change management.",
+        "Symptomatic Shigella infection is treated according to susceptibility. An E. coli urinary isolate is not evidence of EHEC or an enteric syndrome."
+      ]
+    },
+    {
+      "id": "sexually-transmitted-infections", "title": "NAAT and culture in bacterial sexually transmitted infection", "pages": [39,40],
+      "keywords": ["gonorrhoea", "gonorrhea", "gonococcus", "gonococcal", "neisseria gonorrhoeae", "chlamydia", "lgv", "mycoplasma genitalium", "sti"],
+      "facts": [
+        "Gonorrhoea and chlamydia diagnostics use urine or site-appropriate mucosal nucleic-acid testing. If gonococcus is detected by PCR, obtain gonococcal culture for susceptibility testing before treatment.",
+        "Indicate suspected LGV on the chlamydia test request so genotyping can be considered. Mycoplasma genitalium resistance testing may be possible on the nucleic-acid-test specimen.",
+        "These investigations are described in the guide but their results are not supplied in the project's routine blood, urine and wound culture tables."
+      ]
+    },
+    {
+      "id": "endocarditis", "title": "Suspected endocarditis and cardiac-device infection", "pages": [40,41,42],
+      "keywords": ["endocarditis", "heart valve", "echocardiography", "echocardiogram", "pacemaker", "cardiac device", "endovascular"],
+      "facts": [
+        "Obtain multiple blood cultures before antibiotics where possible. During treatment the guide recommends cultures every 1-2 days until negative and consultation with infectious diseases and cardiology.",
+        "Streptococcal endocarditis regimens depend on measured penicillin MIC; request the MIC from the laboratory. S/R data alone do not supply a numeric MIC.",
+        "Suspected pacemaker infection requires blood cultures and specialist consultation before empirical antibiotics; purulent drainage and removed device or pocket material require microbiological sampling."
+      ]
+    },
+    {
+      "id": "joint-infection", "title": "Native and prosthetic joint infection", "pages": [43,44],
+      "keywords": ["septic arthritis", "joint infection", "prosthetic joint", "synovial", "joint aspirate", "arthroplasty"],
+      "facts": [
+        "Before antimicrobial treatment obtain blood cultures and a sterile joint-fluid sample for cell count and differential, bacterial culture, Gram stain, bacterial nucleic-acid testing and crystals.",
+        "Prosthetic-joint evaluation should involve the prosthetic surgery unit, with aspiration under appropriate sterile operative conditions. If septic, start treatment immediately and obtain samples as quickly as possible.",
+        "Interpret negative microbiology alongside clinical suspicion; it does not by itself exclude purulent arthritis. Directed treatment follows susceptibility and specialist review."
+      ]
+    },
+    {
+      "id": "diabetic-foot", "title": "Diabetic and ischaemic foot infection", "pages": [46,47,48],
+      "keywords": ["diabetic foot", "diabetes", "ischaemic foot", "ischemic foot", "foot ulcer", "peripheral arterial"],
+      "facts": [
+        "Assess clinical severity and obtain bacterial cultures. In mild infection, additional surface isolates may reflect colonization selected by sampling technique or previous antibiotics.",
+        "In moderate or severe infection initially consider a mixed infection rather than immediately narrowing to a single isolate. Blood-culture pathogens and deep abscess or operative findings require attention.",
+        "Bone sampling can guide osteomyelitis treatment. With a poor response reassess antimicrobial coverage, adequacy of surgery and circulation."
+      ]
+    },
+    {
+      "id": "bone-infection", "title": "Osteomyelitis and spondylodiscitis", "pages": [48,49,50],
+      "keywords": ["osteomyelitis", "bone infection", "bone biopsy", "spondylodiscitis", "discitis", "vertebral", "psoas", "epidural abscess"],
+      "facts": [
+        "Before treatment, seek a representative abscess or infected-bone sample for bacterial culture, nucleic-acid testing and histopathology; consider fungal or mycobacterial studies according to presentation and risk factors.",
+        "Obtain blood cultures particularly with fever or systemic illness and assess the need for surgery when an abscess or foreign body is present.",
+        "For spondylodiscitis, seek vertebral or abscess samples unless the pathogen is established by blood cultures. In a non-septic patient a clinician may defer treatment briefly to obtain planned samples; this exception must not be extended to a septic patient."
+      ]
+    },
+    {
+      "id": "central-nervous-system", "title": "Suspected meningitis, brain abscess and shunt infection", "pages": [22,23,52,53],
+      "keywords": ["meningitis", "meningococcal", "brain abscess", "central nervous", "csf", "lumbar puncture", "shunt infection"],
+      "facts": [
+        "Suspected bacterial meningitis is urgent. Where CT is required before lumbar puncture, take blood cultures promptly and start the indicated urgent treatment before waiting for imaging or CSF sampling.",
+        "A brain abscess generally requires microbiological sampling unless the cause is already established from blood cultures, with infectious diseases input. Infection site and drug penetration matter.",
+        "For shunt infection, review CSF or removed-shunt culture susceptibility and involve neurosurgery and infectious diseases. A routine blood or urine culture is not a CSF investigation."
+      ]
+    },
+    {
+      "id": "abdominal-infection", "title": "Peritoneal and intra-abdominal infection sampling", "pages": [53,54,55,56],
+      "keywords": ["peritonitis", "peritoneal", "pd fluid", "intra-abdominal", "abdominal abscess", "liver abscess", "cholecystitis", "cholangitis", "pancreatitis", "pancreatic necrosis"],
+      "facts": [
+        "PD-associated peritonitis evaluation includes PD-fluid cells and differential, bacterial Gram stain and culture, and a culture from the catheter exit site; additional investigations depend on the case.",
+        "Obtain drainage or abscess material for microbiology where possible, with attention to nucleic-acid testing if antibiotics have already started. Suspected liver abscess warrants early specialist advice about appropriate samples.",
+        "Infected pancreatic necrosis or peripancreatic abscess calls for image-guided sampling where possible and treatment directed by the results. Source control is a central part of management."
+      ]
+    },
+    {
+      "id": "treatment-duration", "title": "Treatment duration and source control", "pages": [62,63],
+      "keywords": ["duration", "how long", "course length", "length of treatment", "days of treatment", "stop date"],
+      "facts": [
+        "The duration table is indicative, not a universal schedule. Duration depends on response, underlying disease, deep infection and adequacy of surgical source control.",
+        "The general duration section does not replace the separate endocarditis guidance. Different passages contain syndrome-specific schedules; do not silently reconcile them into an invented patient regimen.",
+        "Culture dates alone do not establish when treatment began or whether blood cultures have cleared. Those dates must not be invented to calculate a stop date."
+      ]
+    },
+    {
+      "id": "drug-monitoring", "title": "Therapeutic drug and toxicity monitoring", "pages": [42,46,63,64],
+      "keywords": ["monitoring", "vancomycin", "gentamicin", "tobramycin", "aminoglycoside", "trough", "drug level", "creatinine", "renal", "kidney function"],
+      "facts": [
+        "Vancomycin and aminoglycosides need attention to kidney function and drug concentrations. Monitoring depends on the drug, dosing approach and infection; a susceptibility result is not a drug-level measurement.",
+        "Long courses require laboratory safety monitoring. The prosthetic-joint section calls for at least weekly blood counts, CRP, electrolytes, creatinine and liver tests, with more frequent renal and drug-level monitoring for nephrotoxic treatment.",
+        "This project's microbiology records do not provide therapeutic drug levels, current renal function or actual administered doses. The full source contains concentration targets; they are not transcribed into this summary."
+      ]
+    },
+    {
+      "id": "penicillin-allergy", "title": "Penicillin and beta-lactam allergy assessment", "pages": [67,68,69],
+      "keywords": ["allergy", "allergic", "penicillin allergy", "beta-lactam allergy", "anaphylaxis", "rash", "urticaria", "drug challenge"],
+      "facts": [
+        "Clarify the implicated drug, when the reaction occurred, timing after exposure, rash characteristics, severity, hospitalization and whether anaphylaxis occurred.",
+        "An old allergy label is not a complete assessment. The source describes clinically supervised reassessment for selected low-risk histories, with contraindications including anaphylaxis, serious systemic or severe skin reactions, and clinical instability.",
+        "Do not infer absence of allergy from a missing database field, remove an allergy label automatically, or turn this summary into a drug-challenge protocol. Specialist assessment may be needed."
+      ]
+    },
+    {
+      "id": "yeast-in-blood", "title": "Yeast in a blood culture", "pages": [14,15],
+      "keywords": ["candida", "candidemia", "candidaemia", "fungemia", "yeast"], "organisms": ["Candida"],
+      "facts": [
+        "The guide states that yeast or Candida in blood cultures must not be dismissed as contamination and requires infectious diseases consultation and treatment assessment.",
+        "Repeat blood cultures and evaluate catheters, foreign bodies and deep foci. Candida is not a bacterium, and an antibacterial model ranking is not antifungal treatment guidance."
+      ]
+    }
+  ]
+}

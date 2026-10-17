@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { AppError, ports, sourceToken, type SourceName } from './config.js';
 import { keyOf, recordSchema, type Table } from './catalog.js';
 import { SourceStore, type Row } from './source-store.js';
+import { fhirChanges } from './fhir-source.js';
 
 const aliases:Record<string,string>={ast:'ast_results','ast-results':'ast_results','susceptibility-results':'ast_results','specimen-types':'specimen_types','ward-stays':'ward_stays'};
 export const resolveTable=(name:string)=>aliases[name]||name;
@@ -70,8 +71,7 @@ export async function createSourceApi(store:SourceStore) {
   });
   app.get('/health',async()=>({status:'ok',source:store.source,database:`${store.source}_db.sqlite`}));
   app.get('/schema',async()=>({source:store.source,tables:store.catalog}));
-  app.get('/events',async request=>{const q=request.query as Row;return store.events(Number(q.since||0),Number(q.limit||500));});
-  app.get('/snapshot',async()=>store.snapshot());
+  app.get('/fhir/changes',async request=>{const q=request.query as Row;return fhirChanges(store,Number(q.after||0),Number(q.limit||100));});
   if(store.source==='adt')app.get('/patients/:id/stays',async request=>{const {id}=request.params as Row;return store.list('ward_stays',{patient_id:id,limit:1000});});
   for(const table of store.catalog){
     const routes=[table.name,...Object.keys(aliases).filter(k=>aliases[k]===table.name)];

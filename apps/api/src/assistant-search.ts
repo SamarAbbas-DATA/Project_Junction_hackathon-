@@ -3,6 +3,8 @@ import { AppError } from './config.js';
 import type { HubStore } from './hub-store.js';
 import { Predictor,patientInputs } from './predictor.js';
 import type { Row } from './source-store.js';
+import { selectTyksGuidance } from './tyks-guidelines.js';
+import { assistantAnomalies } from './anomaly-store.js';
 
 export type AssistantMode='patient'|'culture'|'ward'|'general';
 export type Focus={patient_ids?:string[];culture_ids?:string[];ward_codes?:string[]};
@@ -65,8 +67,8 @@ export class AssistantSearch {
     if(!message||message.length>4000)throw new AppError(400,'Enter a question of up to 4,000 characters');
     phase('searching');
     const tokens=splitTokens(message),messageEntities=await this.lookup(tokens),structured=tokens.filter(looksLikeId);
-    for(const match of message.matchAll(/\b(patient(?:\s+id)?|culture(?:\s+id)?|ward(?:\s+code)?|isolate(?:\s+id)?)(?:\s*[:=#]\s*|\s+)([A-Za-z0-9][A-Za-z0-9_-]{1,149})\b/gi)){
-      const value=match[2];if(/id|code/i.test(match[1])||/[0-9_-]/.test(value)||value===value.toUpperCase())if(!structured.includes(value))structured.push(value);
+    for(const match of message.matchAll(/\b(patient(?:\s+id)?|culture(?:\s+id)?|ward(?:\s+code)?|isolate(?:\s+id)?|potilas(?:tunnus)?|viljely(?:tunnus)?|osasto(?:koodi)?|eristys(?:tunnus)?)(?:\s*[:=#]\s*|\s+)([A-Za-z0-9][A-Za-z0-9_-]{1,149})\b/gi)){
+      const value=match[2];if(/id|code|tunnus|koodi/i.test(match[1])||/[0-9_-]/.test(value)||value===value.toUpperCase())if(!structured.includes(value))structured.push(value);
     }
     let entities=messageEntities,missing:Row[]=[];
     // A new ID in the question replaces the previous focus, including when it is missing.
@@ -83,7 +85,7 @@ export class AssistantSearch {
     for(const token of structured)if(!entities.some(e=>e.id.toLowerCase()===token.toLowerCase()))missing.push({kind:'record',id:token});
     const omittedEntities=Math.max(0,entities.length-4);entities=entities.slice(0,4);
     const records:Row={patients:[],cultures:[],wards:[]},sources:Row[]=[],notes:string[]=[],histories=new Map<string,Row>();
-    const pending=/pending|await|waiting|unfinished|under test/i.test(message);
+    const pending=/pending|await|waiting|unfinished|under test|odotta|kesken|puuttuv|valmistumat/i.test(message);
     const cultureIds=new Set<string>(),candidateCases=new Map<string,{patient_id:string;culture_id:string;isolate_id?:string}>();
     async function getHistory(hub:Hub,id:string) {if(!histories.has(id)){const value=await hub.patientHistory(id);if(value)histories.set(id,value);}return histories.get(id);}
     for(const entity of entities) {
@@ -119,7 +121,7 @@ export class AssistantSearch {
     if(!entities.length&&!missing.length) {
       const overview=await this.hub.overview();records.overview={totals:overview.totals,wards:overview.wards.slice(0,12).map((w:Row)=>pick(w,['ward_code','ward_en','cultures','pending'])),omitted_wards:Math.max(0,overview.wards.length-12),specimens:overview.specimens,organisms:overview.organisms};
       if(pending)records.pending_samples=(await this.hub.pool.query("SELECT culture_id,patient_id,ward_code,sample_date,specimen,status FROM lis.cultures WHERE status<>'final' ORDER BY sample_date DESC,culture_id DESC LIMIT 8")).rows;
-      if(/antibiogram|resistan|susceptibil|annual|yearly/i.test(message)){const data=await this.hub.antibiogram(period(message));records.antibiogram={...data,rows:data.rows.slice(0,12),omitted_rows:Math.max(0,data.rows.length-12)};}
+      if(/antibiogram|resistan|susceptibil|annual|yearly|resistens|herkky|vuositt|vuosiraport/i.test(message)){const data=await this.hub.antibiogram(period(message));records.antibiogram={...data,rows:data.rows.slice(0,12),omitted_rows:Math.max(0,data.rows.length-12)};}
     }
     if(records.cultures.length) {
       const codes=unique(records.cultures.flatMap((c:Row)=>c.isolates.flatMap((i:Row)=>i.ast.map((a:string[])=>a[0])))) as string[];
@@ -153,6 +155,10 @@ export class AssistantSearch {
       if(oversized()){records.antibiotic_reference=[];packet.notes.push('The antibiotic dictionary was omitted to fit the context budget.');}
       for(const patient of records.patients){patient.included_culture_ids=records.cultures.filter((c:Row)=>c.patient_id===patient.record.patient_id).map((c:Row)=>c.culture_id);patient.omitted_cultures=patient.summary.samples-patient.included_culture_ids.length;}
     }
+    packet.anomalies=missing.length?{alerts:[],omitted:0,interpretation:'No anomaly context is attached to an unresolved identifier.'}:await assistantAnomalies(this.hub.pool,{
+      patient_ids:records.patients.map((p:Row)=>p.record.patient_id),culture_ids:[...cultureIds],ward_codes:focus.ward_codes
+    });
+    packet.clinical_guidance=selectTyksGuidance(message,packet);
     packet.retrieval.duration_ms=Math.round(performance.now()-started);return packet;
   }
 }

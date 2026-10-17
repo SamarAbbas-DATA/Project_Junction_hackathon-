@@ -1,7 +1,9 @@
 import type { Pool, PoolClient } from 'pg';
 import { tables, fieldNames, type Table } from './catalog.js';
-import { sourceNames, ports, sourceToken, type SourceName } from './config.js';
+import { AppError,sourceNames, ports, sourceToken, type SourceName } from './config.js';
 import type { Row } from './source-store.js';
+import { initializeIntake,receiveFhir } from './fhir-intake.js';
+import { initializeAnomalies } from './anomaly-store.js';
 
 const sqlTable=(t:Table)=>`${t.source}.${t.name}`;
 export const sourceHeaders=():Record<string,string>=>sourceToken ? {'x-api-key':sourceToken} : {};
@@ -9,6 +11,7 @@ export class HubStore {
   sourceStatus: Record<string,Row> = Object.fromEntries(sourceNames.map(source=>[source,{source,status:'starting',last_sync_at:null,error:null}]));
   syncing=false;
   onChange: (data:Row)=>void=()=>{};
+  initialMessages?: (source:SourceName)=>{cursor:number;messages:Iterable<Row>};
   constructor(public pool:Pool){}
   async initialize(){
     await this.pool.query(`CREATE SCHEMA IF NOT EXISTS adt; CREATE SCHEMA IF NOT EXISTS lis; CREATE SCHEMA IF NOT EXISTS formulary;
@@ -41,6 +44,8 @@ export class HubStore {
       CREATE OR REPLACE VIEW patient_timeline AS SELECT c.patient_id,c.culture_id,c.sample_date,c.ward_code,c.specimen,c.status,c.result AS culture_result,
         i.isolate_id,i.organism,a.antibiotic_code,a.result AS susceptibility_result,a.guideline
         FROM lis.cultures c LEFT JOIN lis.isolates i USING(culture_id) LEFT JOIN lis.ast_results a USING(isolate_id);`);
+    await initializeIntake(this);
+    await initializeAnomalies(this.pool);
   }
   async upsert(client:PoolClient,table:Table,records:Row[]) {
     if(!records.length)return;
@@ -52,52 +57,60 @@ export class HubStore {
     const prior=await this.pool.query('SELECT * FROM sync_cursors WHERE source=$1',[source]);
     if(prior.rowCount){this.sourceStatus[source]={source,status:'connected',last_sync_at:prior.rows[0].last_sync_at,cursor:Number(prior.rows[0].last_event_id),error:null};return;}
     this.sourceStatus[source]={source,status:'importing',last_sync_at:null,error:null};
-    console.log(`Taking consistent ${source} API snapshot…`);
-    const response=await fetch(`http://127.0.0.1:${ports[source]}/snapshot`,{headers:sourceHeaders(),signal:AbortSignal.timeout(120000)});
-    if(!response.ok)throw new Error(`${source} snapshot: HTTP ${response.status}`);
-    const snapshot=await response.json() as Row;
-    const client=await this.pool.connect();
-    try{
-      await client.query('BEGIN');
-      for(const table of tables.filter(t=>t.source===source)){
-        const rows=snapshot.tables[table.name];
-        for(let i=0;i<rows.length;i+=2000)await this.upsert(client,table,rows.slice(i,i+2000));
-      }
-      await client.query('INSERT INTO sync_cursors(source,last_event_id) VALUES($1,$2)',[source,snapshot.cursor]);
-      await client.query('COMMIT');
-      this.sourceStatus[source]={source,status:'connected',last_sync_at:new Date().toISOString(),cursor:snapshot.cursor,error:null};
-      console.log(`${source} imported at event ${snapshot.cursor}`);
-    }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+    if(!this.initialMessages)throw new Error('Configure the hospital initial-load adapter before synchronization');
+    const snapshot=this.initialMessages(source);
+    for(const message of snapshot.messages)await receiveFhir(this,source,message);
+    await this.pool.query('INSERT INTO sync_cursors(source,last_event_id) VALUES($1,$2) ON CONFLICT(source) DO NOTHING',[source,snapshot.cursor]);
+    this.sourceStatus[source]={source,status:'connected',last_sync_at:new Date().toISOString(),cursor:snapshot.cursor,error:null};
+    console.log(`${source} initial FHIR load completed at event ${snapshot.cursor}`);
   }
   async syncSource(source:SourceName){
     const cursorResult=await this.pool.query('SELECT last_event_id FROM sync_cursors WHERE source=$1',[source]);
     if(!cursorResult.rowCount){await this.bootstrap(source);return 0;}
     const cursor=Number(cursorResult.rows[0].last_event_id);
-    const response=await fetch(`http://127.0.0.1:${ports[source]}/events?since=${cursor}&limit=500`,{headers:sourceHeaders(),signal:AbortSignal.timeout(10000)});
+    const response=await fetch(`http://127.0.0.1:${ports[source]}/fhir/changes?after=${cursor}&limit=500`,{headers:sourceHeaders(),signal:AbortSignal.timeout(10000)});
     if(!response.ok)throw new Error(`HTTP ${response.status}`);
     const data=await response.json() as Row;
-    const client=await this.pool.connect();let applied=0;
-    try{
-      await client.query('BEGIN');
-      for(const event of data.events){
-        const table=tables.find(t=>t.source===source&&t.name===event.entity);if(!table)throw new Error('Unknown event entity');
-        const logged=await client.query('INSERT INTO event_log(source,source_event_id,entity,record_key,operation,payload,occurred_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(source,source_event_id) DO NOTHING RETURNING id',[source,event.event_id,event.entity,event.record_key,event.operation,event.payload,event.occurred_at]);
-        if(!logged.rowCount)continue;
-        if(event.operation==='delete')await client.query(`DELETE FROM ${sqlTable(table)} WHERE ${table.keys.map((k,n)=>`${k}=$${n+1}`).join(' AND ')}`,table.keys.map(k=>event.payload[k]));
-        else await this.upsert(client,table,[event.payload]);
-        applied++;
-      }
-      await client.query('UPDATE sync_cursors SET last_event_id=$2,last_sync_at=now() WHERE source=$1',[source,data.next_cursor]);
-      await client.query('COMMIT');
-      this.sourceStatus[source]={source,status:'connected',last_sync_at:new Date().toISOString(),cursor:Number(data.next_cursor),error:null};
-      if(applied)this.onChange({type:'source.updated',source,count:applied,cursor:data.next_cursor});
-    }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+    let applied=0;
+    for(const message of data.messages)applied+=(await receiveFhir(this,source,message)).applied;
+    // Push does not advance the catch-up watermark. It can arrive out of order;
+    // this ordered, replay-safe path accounts for every event before advancing.
+    await this.pool.query('UPDATE sync_cursors SET last_event_id=$2,last_sync_at=now() WHERE source=$1',[source,data.next_cursor]);
+    this.sourceStatus[source]={source,status:'connected',last_sync_at:new Date().toISOString(),cursor:Number(data.next_cursor),error:null};
     return applied;
   }
   async sync(){
     if(this.syncing)return;this.syncing=true;
     try{for(const source of sourceNames){try{await this.syncSource(source);}catch(e){this.sourceStatus[source]={...this.sourceStatus[source],status:'offline',error:(e as Error).message};}}}
     finally{this.syncing=false;}
+  }
+  async records(source:SourceName,name:string,query:Row={}){
+    const table=tables.find(t=>t.source===source&&t.name===name);if(!table)throw new AppError(404,'Unknown table');
+    const where:string[]=[],values:any[]=[],limit=Math.min(Math.max(Math.trunc(Number(query.limit)||25),1),1000),offset=Math.max(Math.trunc(Number(query.offset)||0),0);
+    const bind=(v:any)=>{values.push(v);return '$'+values.length;};
+    if(query.q){const p=bind('%'+String(query.q).replace(/[\\%_]/g,'\\$&')+'%');where.push(`(${table.search.map(f=>`${f} ILIKE ${p} ESCAPE '\\'`).join(' OR ')})`);}
+    for(const [input,v]of Object.entries(query)){
+      const field=({ward:'ward_code',from:'sample_date',to:'sample_date'} as Row)[input]||input;
+      if(v===undefined||v===''||!fieldNames(table).includes(field))continue;
+      where.push(`${field}${input==='from'?'>=':input==='to'?'<=':'='}${bind(v)}`);
+    }
+    const clause=where.length?' WHERE '+where.join(' AND '):'',relation=sqlTable(table);
+    const total=(await this.pool.query(`SELECT count(*)::integer AS n FROM ${relation}${clause}`,values)).rows[0].n;
+    const order=query.sort==='recent'?`created_at DESC NULLS LAST,${table.keys.join(',')}`:name==='cultures'?'sample_date DESC,culture_id':table.keys.join(',');
+    const rows=(await this.pool.query(`SELECT * FROM ${relation}${clause} ORDER BY ${order} LIMIT ${bind(limit)} OFFSET ${bind(offset)}`,values)).rows;
+    return {rows,total,limit,offset};
+  }
+  async record(source:SourceName,name:string,key:string):Promise<Row>{
+    const table=tables.find(t=>t.source===source&&t.name===name);if(!table)throw new AppError(404,'Unknown table');
+    const values=key.split('~');if(values.length!==table.keys.length)throw new AppError(400,'Record key does not match table key');
+    const row=(await this.pool.query(`SELECT * FROM ${sqlTable(table)} WHERE ${table.keys.map((f,i)=>`${f}=$${i+1}`).join(' AND ')}`,values)).rows[0];
+    if(!row)throw new AppError(404,'Record not found');
+    if(name==='cultures'){
+      row.isolates=(await this.pool.query('SELECT * FROM lis.isolates WHERE culture_id=$1 ORDER BY isolate_no',[key])).rows;
+      const tests=(await this.pool.query('SELECT a.* FROM lis.ast_results a JOIN lis.isolates i USING(isolate_id) WHERE i.culture_id=$1',[key])).rows;
+      for(const isolate of row.isolates)isolate.ast_results=tests.filter(a=>a.isolate_id===isolate.isolate_id);
+    }
+    return row;
   }
   async overview(){
     const totals=(await this.pool.query(`SELECT

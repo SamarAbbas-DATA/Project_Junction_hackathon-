@@ -1,0 +1,16 @@
+{
+  "version": "2026-10-17.v1",
+  "current_days": 28,
+  "baseline_days": 84,
+  "minimum_tested": 30,
+  "minimum_increase": 0.15,
+  "false_discovery_rate": 0.05,
+  "cluster_days": 7,
+  "cluster_minimum_patients": 3,
+  "cluster_minimum_baseline": 30,
+  "cluster_minimum_increase": 0.1,
+  "quality_grace_seconds": 120,
+  "rejection_window_hours": 24,
+  "worker_interval_ms": 1000,
+  "description": "Configurable research/demo surveillance settings, not TYKS clinical thresholds. Comparisons require matching organism/specimen and, for resistance, the same interpretation edition. Ward means recorded sample location."
+}

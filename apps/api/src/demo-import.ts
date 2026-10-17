@@ -54,7 +54,7 @@ async function sourceRequest(table:Table,key?:string,method='GET',body?:Row,head
 }
 export type FeedProgress={mode:'hospital';group_size:1|2;interval_ms:number;tick:number;total_ticks:number;patients_registered:number;patients_total:number;references_done:boolean;next_tick_at?:string};
 export type ImportReceipt={file:string;hash:string;batch_id:string;status:'queued'|'importing'|'paused'|'completed'|'failed';created:number;reused:number;finalized:number;updated_at:string;error?:string;progress?:FeedProgress;replayed?:boolean};
-export type ImportOptions={intervalMs?:number;groupSize?:1|2;signal?:AbortSignal;onProgress?:(receipt:ImportReceipt)=>void|Promise<void>};
+export type ImportOptions={intervalMs?:number;groupSize?:1|2;useCurrentInterval?:boolean;signal?:AbortSignal;onProgress?:(receipt:ImportReceipt)=>void|Promise<void>};
 
 export async function importDemoFile(file:string,receiptDirectory=path.join(dataDir,'demo-imports'),options:ImportOptions={}):Promise<ImportReceipt> {
   const bytes=fs.readFileSync(file);
@@ -67,9 +67,14 @@ export async function importDemoFile(file:string,receiptDirectory=path.join(data
   const receipt:ImportReceipt={file:path.resolve(file),hash,batch_id:batch.batch_id,status:'importing',created:previous?.created||0,reused:previous?.reused||0,finalized:previous?.finalized||0,updated_at:new Date().toISOString(),progress:previous?.progress};
   const paced=!!receipt.progress||(options.intervalMs||0)>0;
   if(paced&&!receipt.progress){
-    const group=options.groupSize||1,interval=options.intervalMs||5000;
+    const group=options.groupSize||1,interval=options.intervalMs||30000;
     if(![1,2].includes(group)||!Number.isFinite(interval)||interval<10||interval>3600000)throw new AppError(400,'Use 1 or 2 patients per group and an interval between 10 ms and one hour');
     receipt.progress={mode:'hospital',group_size:group,interval_ms:interval,tick:0,total_ticks:Math.ceil(batch.tables.patients.length/group)+2,patients_registered:0,patients_total:batch.tables.patients.length,references_done:false};
+  }
+  if(receipt.progress&&options.useCurrentInterval&&options.intervalMs&&receipt.progress.interval_ms!==options.intervalMs){
+    if(!Number.isFinite(options.intervalMs)||options.intervalMs<10||options.intervalMs>3600000)throw new AppError(400,'Invalid feed interval');
+    receipt.progress.interval_ms=options.intervalMs;
+    receipt.progress.next_tick_at=new Date(Date.now()+options.intervalMs).toISOString();
   }
   function save() {receipt.updated_at=new Date().toISOString();fs.writeFileSync(receiptFile+'.tmp',JSON.stringify(receipt,null,2)+'\n');fs.renameSync(receiptFile+'.tmp',receiptFile);}
   const table=(name:string)=>tables.find(t=>t.name===name)!;
@@ -98,9 +103,8 @@ export async function importDemoFile(file:string,receiptDirectory=path.join(data
     }else{
       const progress=receipt.progress!,groupCount=Math.ceil(batch.tables.patients.length/progress.group_size);
       if(!progress.references_done){
-        let additions=0;
         for(const name of ['wards','antibiotics','guidelines','specimen_types'])for(const row of batch.tables[name]){
-          if(await ensure(name,row))if(++additions%progress.group_size===0)await pause(progress.interval_ms,undefined,{signal:options.signal});
+          await ensure(name,row);
         }
         progress.references_done=true;save();
       }
@@ -135,7 +139,7 @@ export function watchDemoInbox(directory=process.env.SYNTHETIC_INBOX||path.join(
   fs.mkdirSync(directory,{recursive:true});
   let stopped=false,active:Promise<void>|undefined;
   const completed=new Set<string>(),retryAfter=new Map<string,number>(),controller=new AbortController();
-  const intervalMs=options.intervalMs??Number(process.env.SYNTHETIC_IMPORT_INTERVAL_MS||5000),groupSize=options.groupSize??Number(process.env.SYNTHETIC_IMPORT_GROUP_SIZE||1) as 1|2;
+  const intervalMs=options.intervalMs??Number(process.env.SYNTHETIC_IMPORT_INTERVAL_MS||30000),groupSize=options.groupSize??Number(process.env.SYNTHETIC_IMPORT_GROUP_SIZE||1) as 1|2;
   if(!Number.isFinite(intervalMs)||intervalMs<10||intervalMs>3600000||![1,2].includes(groupSize))throw new AppError(400,'Invalid synthetic feed settings: choose group size 1 or 2 and a positive interval between 10 ms and one hour');
   async function scan() {
     for(const name of fs.readdirSync(directory).filter(n=>n.toLowerCase().endsWith('.zip')).sort()) {
@@ -145,7 +149,7 @@ export function watchDemoInbox(directory=process.env.SYNTHETIC_INBOX||path.join(
       const fingerprint=`${name}:${stat.size}:${stat.mtimeMs}`;
       if(completed.has(fingerprint)||(retryAfter.get(fingerprint)||0)>Date.now())continue;
       try {
-        const receipt=await importDemoFile(file,receiptDirectory,{...options,intervalMs,groupSize,signal:controller.signal,onProgress:async receipt=>{
+        const receipt=await importDemoFile(file,receiptDirectory,{...options,intervalMs,groupSize,useCurrentInterval:true,signal:controller.signal,onProgress:async receipt=>{
           console.log(`Synthetic feed ${receipt.batch_id}: ${receipt.progress!.patients_registered}/${receipt.progress!.patients_total} patients registered · tick ${receipt.progress!.tick}/${receipt.progress!.total_ticks}`);await options.onProgress?.(receipt);
         }});
         if(receipt.status==='completed')completed.add(fingerprint);retryAfter.delete(fingerprint);

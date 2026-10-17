@@ -6,6 +6,7 @@ import { tables, fieldNames, keyOf, type Table } from './catalog.js';
 
 export type Row = Record<string, any>;
 export class SourceStore {
+  onChange:()=>void=()=>{};
   db: DatabaseSync;
   catalog: Table[];
   constructor(public source: SourceName, directory:string) {
@@ -16,7 +17,9 @@ export class SourceStore {
     this.db.exec(`CREATE TABLE IF NOT EXISTS events (
       event_id INTEGER PRIMARY KEY AUTOINCREMENT, entity TEXT NOT NULL, record_key TEXT NOT NULL,
       operation TEXT NOT NULL, payload TEXT NOT NULL, occurred_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-    ); CREATE TABLE IF NOT EXISTS import_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    ); CREATE INDEX IF NOT EXISTS idx_event_record ON events(entity,record_key,event_id DESC);
+    CREATE TABLE IF NOT EXISTS fhir_outbox(event_id INTEGER PRIMARY KEY,bundle TEXT NOT NULL,FOREIGN KEY(event_id) REFERENCES events(event_id));
+    CREATE TABLE IF NOT EXISTS import_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS request_keys (request_key TEXT PRIMARY KEY, table_name TEXT NOT NULL, record_key TEXT NOT NULL, body_hash TEXT NOT NULL);`);
     for (const table of this.catalog) {
       const columns = table.fields.map(f=>`${f.name} ${f.type ? 'INTEGER' : 'TEXT'}${f.required ? ' NOT NULL' : ''}${f.values ? ` CHECK (${f.name} IN (${f.values.map(v=>typeof v==='number' ? v : `'${v}'`).join(',')}))` : ''}`);
@@ -80,6 +83,7 @@ export class SourceStore {
   insert(name:string,record:Row) {
     const table=this.table(name), fields=fieldNames(table);
     this.db.prepare(`INSERT INTO ${name} (${fields.join(',')}) VALUES (${fields.map(()=>'?').join(',')})`).run(...fields.map(f=>record[f]??null));
+    this.onChange();
     return this.get(name,keyOf(table,record))!;
   }
   update(name:string,key:string,patch:Row,expectedVersion?:number) {
@@ -91,6 +95,7 @@ export class SourceStore {
     if(!fields.length)throw new AppError(400,'No editable fields supplied');
     const result=this.db.prepare(`UPDATE ${name} SET ${fields.map(f=>`${f}=?`).join(',')},updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),record_version=record_version+1 WHERE ${table.keys.map(k=>`${k}=?`).join(' AND ')} AND record_version=?`).run(...fields.map(f=>patch[f]??null),...table.keys.map(k=>current[k]),current.record_version);
     if(Number(result.changes)!==1)throw new AppError(409,'Concurrent update: reload the record');
+    this.onChange();
     return this.get(name,key)!;
   }
   close(){this.db.close();}

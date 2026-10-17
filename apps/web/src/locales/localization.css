@@ -1,0 +1,9 @@
+.language-switch{display:flex;align-items:center;gap:7px;flex:none;color:#171a1e;border:1px solid #cbd5e1;background:#fff;border-radius:9px;padding:6px 9px}
+.language-switch select{border:0;background:transparent;color:#171a1e;font:inherit;font-size:14px;font-weight:600;cursor:pointer;max-width:94px;padding:4px 16px 4px 0}
+.language-switch:focus-within{outline:2px solid #2861ec;outline-offset:2px}
+.sidebar-partners{padding-top:18px;padding-bottom:26px}
+html[lang=fi] .nav-item{font-size:14px}
+html[lang=fi] .patient-directory-tools,html[lang=fi] .explorer-toolbar{flex-wrap:wrap;gap:12px}
+html[lang=fi] .patient-directory-actions{flex-wrap:wrap}
+.topbar-right{gap:16px}
+@media(max-width:730px){.language-switch{padding:4px 6px}.topbar-right{gap:8px}.topbar .topbar-profile{display:none}.new-record-button{font-size:13px;padding:9px 10px}}

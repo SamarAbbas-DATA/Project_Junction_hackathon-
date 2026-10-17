@@ -18,6 +18,12 @@ import { migrateSyntheticIdentifiers } from './migrate-synthetic-identifiers.js'
 import path from 'node:path';
 import { root } from './config.js';
 import { replayCompletedDemo } from './demo-replay.js';
+import { bootstrapMessages } from './fhir-mapping.js';
+import { startFhirSender } from './fhir-source.js';
+import { registerFhirIntake } from './fhir-intake.js';
+import { AnomalyDetector } from './anomaly-detector.js';
+import { registerAnomalies } from './anomaly-api.js';
+import { AnomalyDemoService,registerAnomalyDemo } from './anomaly-demo.js';
 
 const stores=Object.fromEntries(sourceNames.map(source=>[source,new SourceStore(source,dataDir)]));
 importData(stores);
@@ -33,8 +39,8 @@ for(const source of sourceNames){
   console.log(`${source.toUpperCase()} API: http://127.0.0.1:${ports[source]}/docs`);
 }
 const pool=await startPostgres();
-const hub=new HubStore(pool);await hub.initialize();
-const app=Fastify({logger:false,bodyLimit:1024*1024});
+const hub=new HubStore(pool);hub.initialMessages=source=>bootstrapMessages(stores[source]);await hub.initialize();
+const app=Fastify({logger:false,bodyLimit:5*1024*1024});
 await app.register(cors,{origin:['http://127.0.0.1:5173','http://localhost:5173']});
 await app.register(swagger,{openapi:{info:{title:'AMR Hub application API',version:'1.0.0'}}});
 await app.register(swaggerUI,{routePrefix:'/docs'});
@@ -51,6 +57,9 @@ app.get('/api/overview',async()=>hub.overview());
 const predictor=new Predictor();
 registerPredictor(app,hub,predictor);
 registerAssistant(app,hub,predictor);
+registerFhirIntake(app,hub);
+registerAnomalies(app,hub);
+registerAnomalyDemo(app,new AnomalyDemoService(hub,stores));
 app.get('/api/sources',async()=>({sources:Object.values(hub.sourceStatus)}));
 app.post('/api/sync',async()=>{await hub.sync();return {sources:Object.values(hub.sourceStatus)};});
 app.get('/api/activity',async request=>{
@@ -81,6 +90,7 @@ app.route({method:['GET','PATCH'],url:'/api/source/:source/:table/:id',handler:p
 async function proxy(request:any,reply:any){
   const {source,table,id}=request.params;
   if(!tables.some(t=>t.source===source&&t.name===table))throw new AppError(404,'Unknown source table');
+  if(request.method==='GET')return id!==undefined?hub.record(source,table,id):hub.records(source,table,request.query||{});
   const url=new URL(`http://127.0.0.1:${ports[source as SourceName]}/${table}${id!==undefined?'/'+encodeURIComponent(id):''}`);
   for(const [key,value]of Object.entries(request.query||{}))url.searchParams.set(key,String(value));
   const headers:Record<string,string>={...sourceHeaders()};
@@ -104,6 +114,8 @@ if(replay?.reset){
   while(sourceNames.some(source=>hub.sourceStatus[source].status==='connected'&&hub.sourceStatus[source].cursor<targets[source]))await hub.sync();
 }
 console.log('Initial synchronization complete. React app: http://127.0.0.1:5173');
+const anomalyDetector=new AnomalyDetector(hub);await anomalyDetector.start();
+const senders=sourceNames.map(source=>startFhirSender(stores[source],`http://127.0.0.1:${hubPort}/api/intake/fhir`,Number(hub.sourceStatus[source].cursor)||0));
 const demoInbox=process.env.SYNTHETIC_AUTO_IMPORT==='false'?null:watchDemoInbox();
 if(demoInbox)console.log(`Synthetic CSV inbox: ${demoInbox.directory} · ${demoInbox.groupSize} patient(s) every ${demoInbox.intervalMs/1000}s, with staged laboratory results`);
 const timer=setInterval(()=>void hub.sync(),syncInterval);
@@ -111,6 +123,8 @@ let shuttingDown=false;
 async function shutdown(){
   if(shuttingDown)return;shuttingDown=true;clearInterval(timer);for(const client of clients)client.end();
   await demoInbox?.stop();
+  await anomalyDetector.stop();
+  for(const sender of senders)await sender.stop();
   await app.close();for(const source of sourceApps)await source.close();
   while(hub.syncing)await new Promise(r=>setTimeout(r,50));
   await pool.end();Object.values(stores).forEach(s=>s.close());process.exit(0);

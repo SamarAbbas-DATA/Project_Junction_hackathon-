@@ -1,0 +1,16 @@
+/* Original partner artwork, kept in its original colours and proportions. */
+.sidebar-partners{padding:12px 8px 20px}
+.partner-branding{display:flex;align-items:center;justify-content:flex-start;gap:9px;min-width:0}
+.partner-branding img{display:block;object-fit:contain;flex:none;height:auto;max-width:none}
+.partner-branding .partner-logo-tyks{width:92px}
+.partner-branding .partner-logo-mylab{width:68px}
+.partner-logo-divider{display:block;flex:none;width:1px;height:18px;background:#cbd5e1}
+.footer-partners{display:flex;align-items:center;gap:12px}
+.partner-branding--compact{gap:8px}
+.partner-branding--compact .partner-logo-tyks{width:72px}
+.partner-branding--compact .partner-logo-mylab{width:54px}
+.partner-branding--compact .partner-logo-divider{height:14px}
+@media(max-width:730px){
+  .footer{gap:12px;flex-wrap:wrap}
+  .footer-partners{gap:10px}
+}

@@ -1,9 +1,10 @@
+import { t,useLocale } from '../../i18n';
 import { useEffect,useRef,useState,type ReactNode } from 'react';
 import { Check,Copy,TriangleAlert } from 'lucide-react';
 import './copy-id.css';
 
-export const identifierLabel=(name:string)=>({patient_id:'patient ID',culture_id:'culture ID',ward_code:'ward code',isolate_id:'isolate ID'}[name]||name.replaceAll('_',' '));
-export default function CopyId({value,label='ID',children,className=''}:{value:string;label?:string;children?:ReactNode;className?:string}){
+export const identifierLabel=(name:string)=>({patient_id:t("patient ID"),culture_id:t("culture ID"),ward_code:t("ward code"),isolate_id:t("isolate ID")}[name]||name.replaceAll('_',' '));
+export default function CopyId({value,label='ID',children,className=''}:{value:string;label?:string;children?:ReactNode;className?:string}){useLocale();
   const [state,setState]=useState<'idle'|'copied'|'error'>('idle'),timer=useRef<ReturnType<typeof setTimeout>|null>(null),version=useRef(0);
   useEffect(()=>()=>{version.current++;if(timer.current)clearTimeout(timer.current);},[]);
   useEffect(()=>{version.current++;setState('idle');if(timer.current)clearTimeout(timer.current);},[value]);
@@ -13,5 +14,5 @@ export default function CopyId({value,label='ID',children,className=''}:{value:s
     catch{if(request!==version.current)return;setState('error');}
     if(timer.current)clearTimeout(timer.current);timer.current=setTimeout(()=>setState('idle'),2000);
   }
-  return <span className={'copy-id '+className}><span className="copy-id-value">{children??value}</span><button type="button" className={'copy-id-control '+state} aria-label={`Copy ${label} ${value}`} title={state==='copied'?'Copied':state==='error'?'Could not copy. Select the ID to copy it manually.':`Copy ${label}`} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onClick={e=>{e.preventDefault();e.stopPropagation();void copy();}}>{state==='copied'?<Check size={13}/>:state==='error'?<TriangleAlert size={13}/>:<Copy size={13}/>}<span className="copy-id-feedback" aria-live="polite">{state==='copied'?'Copied':state==='error'?'Select the ID to copy':''}</span></button></span>;
+  return <span className={'copy-id '+className}><span className="copy-id-value">{children??value}</span><button type="button" className={'copy-id-control '+state} aria-label={t("Copy {kind} {id}",{kind:t(label),id:value})} title={state==='copied'?t("Copied"):state==='error'?t("Could not copy. Select the ID to copy it manually."):t("Copy {kind}",{kind:t(label)})} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onClick={e=>{e.preventDefault();e.stopPropagation();void copy();}}>{state==='copied'?<Check size={13}/>:state==='error'?<TriangleAlert size={13}/>:<Copy size={13}/>}<span className="copy-id-feedback" aria-live="polite">{state==='copied'?t("Copied"):state==='error'?t("Select the ID to copy"):''}</span></button></span>;
 }

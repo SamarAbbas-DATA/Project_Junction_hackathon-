@@ -6,6 +6,8 @@ import './styles.css';
 import './design.css';
 import './readability.css';
 import './components/assistant.css';
+import './branding.css';
+import './locales/localization.css';
 
 const queryClient=new QueryClient({defaultOptions:{queries:{retry:1,refetchOnWindowFocus:true,staleTime:5000}}});
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><QueryClientProvider client={queryClient}><App/></QueryClientProvider></React.StrictMode>);

@@ -9,6 +9,8 @@
   ],
   "scripts": {
     "dev": "concurrently -k -n API,WEB -c blue,green \"npm run dev -w @amr/api\" \"npm run dev -w @amr/web\"",
+    "demo:web": "npm run build -w @amr/web && npm run preview -w @amr/web -- --port 5174 --strictPort",
+    "demo:tunnel": "ngrok http http://127.0.0.1:5174 --traffic-policy-file docs/ngrok-demo.yml",
     "start": "npm run start -w @amr/api",
     "build": "npm run build -w @amr/web && npm run typecheck",
     "typecheck": "npm run typecheck --workspaces --if-present",

@@ -19,6 +19,7 @@ beforeEach(()=>{
     if(options?.method==='POST')return JSON.parse(String(options.body||'{}'));
     if(path==='/catalog')return {tables};
     if(path==='/overview')return overview;
+    if(path==='/anomalies/summary')return {counts:{active:0},jobs:[]};
     if(path==='/patients/P000001/history')return {patient:patients[0],summary:{samples:1,isolates:1,tests:1,pending:0},stays:[],cultures:[{culture_id:'C001',sample_date:'2026-09-27',ward_code:'ED',ward_en:'Emergency department',specimen:'urine',result:'positive',status:'final',isolates:[{isolate_id:'I001',organism:'Escherichia coli',esbl:0,mrsa:0,vre:0,cpe:0,ast_results:[{antibiotic_code:'AMP',antibiotic:'ampicillin',result:'S'}]}]}]};
     if(path.startsWith('/patients?'))return {rows:path.includes('has_samples=no')?[patients[1]]:patients,total:path.includes('has_samples=no')?1:2,summary:{total:2,with_samples:1,with_pending:0}};
     if(path.startsWith('/source/adt/patients'))return {rows:patients,total:2};
@@ -33,23 +34,48 @@ beforeEach(()=>{
 function workspace(){return render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><App/></QueryClientProvider>);}
 
 describe('redesigned clinical workspace',()=>{
-  it('separates source systems from the patient directory and removes Activity & health',async()=>{
+  it('switches the patient view to Finnish without losing selection and removes the requested branding and welcome text',async()=>{
+    const user=userEvent.setup();workspace();await screen.findByText('Registered patients');
+    expect(screen.queryByText('AMR Hub')).toBeNull();expect(document.querySelector('.brand')).toBeNull();
+    expect(screen.getAllByAltText('TYKS').length).toBeGreaterThan(0);expect(screen.getAllByAltText('MYLAB').length).toBeGreaterThan(0);
+    await user.click(screen.getByRole('button',{name:'Patients',exact:true}));
+    expect(screen.queryByText('THE FULL PATIENT PICTURE')).toBeNull();expect(screen.queryByText(/Connect the dots/)).toBeNull();expect(screen.queryByText(/Select a patient to see/)).toBeNull();
+    await user.click(await screen.findByRole('button',{name:'Open patient P000001'}));await screen.findByRole('heading',{name:'P000001'});
+    await user.selectOptions(screen.getByRole('combobox',{name:'Language / Kieli'}),'fi');
+    expect(document.documentElement.lang).toBe('fi');expect(localStorage.getItem('tyks-mylab-language')).toBe('fi');
+    expect(screen.getByRole('heading',{name:'Näytteiden aikajana'})).toBeTruthy();expect(screen.getByRole('heading',{name:'P000001'})).toBeTruthy();expect(screen.getByText('Escherichia coli',{selector:'em'})).toBeTruthy();expect(screen.getByText('Herkkä')).toBeTruthy();expect(screen.getAllByRole('button',{name:'Kopioi potilastunnus P000001'})).toHaveLength(2);
+    await user.selectOptions(screen.getByRole('combobox',{name:'Language / Kieli'}),'en');
+    expect(screen.getByRole('heading',{name:'Sample timeline'})).toBeTruthy();expect(screen.getByRole('heading',{name:'P000001'})).toBeTruthy();
+  });
+  it('submits original database fields and codes from the Finnish registration form',async()=>{
+    const user=userEvent.setup();workspace();await screen.findByText('Registered patients');
+    await user.selectOptions(screen.getByRole('combobox',{name:'Language / Kieli'}),'fi');await user.click(screen.getByRole('button',{name:'Potilaat',exact:true}));
+    await user.click(await screen.findByRole('button',{name:'Rekisteröi potilas'}));
+    await user.type(screen.getByLabelText(/Potilastunnus/),'1018999');await user.selectOptions(screen.getByLabelText(/Sukupuoli/),'F');await user.type(screen.getByLabelText(/Syntymävuosi/),'1990');await user.type(screen.getByLabelText(/Kotialue/),'Turku');
+    await user.click(screen.getByRole('button',{name:'Luo tietue'}));await screen.findByRole('status');
+    const call=mockedApi.mock.calls.find(([path,options])=>path==='/source/adt/patients'&&options?.method==='POST');
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({patient_id:'1018999',sex:'F',birth_year:1990,home_area:'Turku'});
+  });
+  it('keeps laboratory browsing while removing the redundant navigation tabs and source ports',async()=>{
     const user=userEvent.setup();workspace();await screen.findByText('Registered patients');
     expect(screen.queryByText('Activity & health')).toBeNull();
-    await user.click(screen.getByRole('button',{name:'Source explorer'}));
-    expect(screen.queryByRole('button',{name:'New record'})).toBeNull();
-    await screen.findByRole('heading',{name:'People & places'});
-    expect(screen.getByRole('heading',{name:'People & places'})).toBeTruthy();
-    await user.click(screen.getByText('Patients',{selector:'.source-system-tables strong'}));
+    expect(screen.queryByRole('button',{name:'Source explorer',exact:true})).toBeNull();
+    expect(screen.queryByRole('button',{name:'Reference library',exact:true})).toBeNull();
+    await user.click(screen.getByRole('button',{name:/^Culture samples/}));
     await screen.findByRole('button',{name:'Add record'});
+    expect(screen.queryByRole('button',{name:'New record'})).toBeNull();
+    expect(screen.getByRole('combobox',{name:'Source table'})).toHaveProperty('value','cultures');
+    expect(document.querySelector('.tab-port')).toBeNull();
+    await user.click(screen.getByRole('button',{name:'Patient administration',exact:true}));
+    expect(screen.getByRole('combobox',{name:'Source table'})).toHaveProperty('value','patients');
     await user.click(screen.getByRole('button',{name:'Patients',exact:true}));
     await screen.findByRole('textbox',{name:'Search patient directory'});
     expect(screen.queryByRole('button',{name:'Add record'})).toBeNull();
     expect(screen.queryByRole('button',{name:'New record'})).toBeNull();
-    for(const name of ['Laboratory','Reference library','Antibiogram','AMR predictor','AI assistant']){
+    for(const name of ['Laboratory','Antibiogram','AMR predictor','AI assistant']){
       await user.click(screen.getByRole('button',{name:name==='AI assistant'?/^AI assistant/:name,exact:true}));
       expect(screen.queryByRole('button',{name:'New record'})).toBeNull();
-      if(name==='Laboratory'||name==='Reference library')expect(screen.getByRole('button',{name:'Add record'})).toBeTruthy();
+      if(name==='Laboratory')expect(screen.getByRole('button',{name:'Add record'})).toBeTruthy();
     }
     await user.click(screen.getByRole('button',{name:'Overview',exact:true}));
     expect(screen.getByRole('button',{name:'New record'})).toBeTruthy();

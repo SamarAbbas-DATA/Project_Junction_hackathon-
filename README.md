@@ -1,27 +1,48 @@
-# AMR Hub
+# TYKS × MYLAB - Clinical workspace
 
-A hospital data consolidation application for the Tyks × Mylab JunctionX case. Three independent, writable source APIs feed a PostgreSQL hub. The React interface browses and edits source records, follows patients and cultures, calculates first-isolate antibiograms, and exposes a local-model chatbot with approved data tools.
+A hospital data consolidation application for the TYKS × MYLAB JunctionX case. Independent patient/ward, microbiology and formulary sources send FHIR R4 messages into a PostgreSQL hub. The React dashboard follows patient samples and results, calculates antibiograms, uses the supplied AMR prediction model, detects surveillance signals and provides a local AI assistant in English and Finnish.
 
-All supplied patient and microbiology records are synthetic. There is no replay simulator: normal source API writes and corrections drive updates.
+All supplied patient and microbiology records are synthetic. Source writes and corrections produce FHIR R4 messages. A paced synthetic feed demonstrates new registrations and staged laboratory reporting through that same path.
 
-## Run locally
+## Getting started
 
-Requirements: Node.js 24+, npm, and PostgreSQL binaries. On this Windows workspace PostgreSQL 18 is already installed at `C:\Program Files\PostgreSQL\18\bin`. The app creates its own cluster under `data/hub-postgres` on **127.0.0.1:55432**. It does not modify the existing server on port 5432.
+**New computer? Follow [setup.md](setup.md)** for prerequisites, the separate baseline
+dataset, PostgreSQL, Python, Ollama, startup checks, public demo setup and troubleshooting.
+
+Requirements: Node.js **24+**, PostgreSQL binaries, Python **3.8+** for prediction,
+and Ollama with the configured model for the AI assistant. PostgreSQL 18 is used
+in development. SQLite is included with Node.js; no separate SQLite service,
+model training or vector database is required.
+
+From the repository root, after supplying the dataset and local configuration:
 
 ```powershell
-npm.cmd install
+npm.cmd ci
+ollama pull qwen3.5:4b
 npm.cmd run dev
 ```
 
-Open **http://127.0.0.1:5173**. First launch imports the original six CSVs, creates the local hub database and imports consistent source snapshots. Subsequent launches reuse the databases and resume their event cursors.
+Open **http://127.0.0.1:5173/** and wait for initial synchronization. First launch
+imports the original six CSVs, creates the private SQLite sources and PostgreSQL
+hub, and loads the baseline through FHIR adapters. Later launches retain the
+baseline and catch up using saved cursors. The dataset and generated databases
+are not included in Git; see [dataset setup](setup.md#3-supply-the-baseline-dataset-and-database-configuration).
 
-`npm.cmd` avoids PowerShell's blocked `npm.ps1` shortcut. To start only the backend, use `npm.cmd start`. To stop the app, press Ctrl+C. The local PostgreSQL cluster remains available; stop it explicitly with `npm.cmd run db:stop` after stopping the backend.
+The default hub cluster is under `data/hub-postgres`, on `127.0.0.1:55432`,
+with database `hub_db` and user `amr_hub`. Use `POSTGRES_BIN` for a custom
+binaries directory, or `DATABASE_URL` for an empty dedicated database. Local
+settings and credentials belong in an ignored `.env` copied from `.env.example`.
 
-The source importer searches `CSV_DIR`, `data/raw`, then the existing `tmp/microbiology_merge/source` directory. Otherwise it reads `synthetic_microbiology_dataset.zip` from the parent Downloads directory. Set `DATASET_ZIP` to change the ZIP location. The flattened/cleaned test-level CSV is not used for seeding.
+For a temporary judging demo, keep the backend and Ollama running, run
+`npm.cmd run demo:web` in another terminal for the bundled frontend on **5174**,
+then `npm.cmd run demo:tunnel` after configuring an ngrok account. This uses
+[the supplied host-header policy](docs/ngrok-demo.yml); visitors can use the same
+API and local AI through the public link. Full instructions are in
+[public demo setup](setup.md#8-share-a-temporary-public-demo-with-ngrok).
 
-To configure another PostgreSQL instance, copy `.env.example` to `.env` and set `DATABASE_URL` to an **empty, dedicated application database**. The application owns the `adt`, `lis`, `formulary` schemas and hub tables in that database. If set, `DATABASE_URL` bypasses the local cluster startup. `POSTGRES_BIN` can point to another PostgreSQL binary directory.
-
-The default local cluster uses trust authentication on loopback and the services bind to loopback. This is a local development deployment, not a deployment for real patient information. Before remote or clinical use, add authenticated users, authorization, TLS, controlled secrets, backup/recovery, and an approved deployment configuration. `SOURCE_API_TOKEN` can protect direct source requests; the hub supplies it server-side.
+Use synthetic data for public demos: the current app includes record-writing
+controls and does not provide authenticated clinical-user access. A real clinical
+deployment needs its own authentication, authorization and approved infrastructure.
 
 ## Sources and tables
 
@@ -51,8 +72,7 @@ GET   /{table}?q=&limit=25&offset=0
 GET   /{table}/{key}
 POST  /{table}
 PATCH /{table}/{key}       If-Match: current record_version
-GET   /events?since=0&limit=500
-GET   /snapshot
+GET   /fhir/changes?after=0&limit=100
 GET   /schema
 ```
 
@@ -67,19 +87,21 @@ $patientBody = @{patient_id='P100001'; sex='F'; birth_year=1990; home_area='Nort
 Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8001/patients' -ContentType 'application/json' -Headers @{'Idempotency-Key'='register-P100001'} -Body $patientBody
 ```
 
-The frontend calls the hub's allowlisted proxy at `/api/source/{source}/{table}`. It never joins full datasets in the browser. Hub query routes include `/api/overview`, `/api/patients`, `/api/patients/{id}/history`, `/api/antibiogram`, `/api/activity`, `/api/sources`, and `/api/catalog`. `/api/sync` requests synchronization and `/api/events` sends SSE invalidation notifications. Activity and health endpoints remain available for backend operations; the Activity & Health screen and navigation entry have been removed from the frontend.
+The frontend calls `/api/source/{source}/{table}` on the hub. Reads now come from the hub's clean PostgreSQL tables; management writes are forwarded to the owning hospital system and return through its FHIR sender. Source table CRUD remains a private, loopback administration interface; it is not the integration contract. The previous table snapshot and raw change APIs have been removed. Hub query routes include `/api/overview`, `/api/patients`, `/api/patients/{id}/history`, `/api/antibiogram`, `/api/activity`, `/api/sources`, and `/api/catalog`. `/api/sync` requests FHIR catch-up and `/api/events` sends scoped SSE notifications. Activity and health endpoints remain available for backend operations; their screen and navigation entry have been removed.
+
+Each source sender posts a FHIR R4 message Bundle to `POST /api/intake/fhir/{source}`. An API write wakes its sender immediately; a 250 ms local check also detects direct SQL changes. The hub's two-second catch-up reads persisted FHIR messages through `/fhir/changes`, using a sequence cursor rather than timestamps so equal timestamps and deletions are not missed. Both paths use the same saved inbox, source-scoped message IDs and resource-version checks. See [the hospital integration design](docs/hospital-integration.md) for mappings, recovery, the sample document Bundle and the HL7 v2 extension boundary.
 
 ## Interface
 
-The overview uses the supplied medical-dashboard reference: a light canvas, black active navigation, blue actions, dot-matrix charts, and a decorative animated connection sphere. Counts and chart values come from the APIs; no bed occupancy, staffing, or clinical alert figures are invented. Motion for React provides navigation transitions, entry animations, count interpolation, animated bars and SVG motion, with reduced-motion support.
+The overview uses a light canvas, dark readable text, black active navigation, blue actions and dot-matrix charts. Counts and chart values come from the APIs. Motion for React provides navigation transitions, entry animations, count interpolation and animated bars, with reduced-motion support.
 
-Source Explorer opens a directory of the three source systems and their table counts. Selecting a table opens the raw source-record browser and existing add/correction forms. Patients is a separate clinical workbench using consolidated patient summaries, search and sample filters, with an expandable sample → isolate → antibiotic-result timeline. Patients without samples remain visible. Both views initially show the newest additions/registrations first so incoming records appear immediately; their order selectors also offer the original ID/sample-date order.
+The sidebar contains Overview, Patients, Laboratory, Antibiogram, AMR predictor, Anomalies and AI assistant. Laboratory provides source/table browsing and add/correction forms; overview shortcuts open the relevant laboratory table. Source explorer and Reference library are no longer separate tabs. Patients is a dedicated workbench with consolidated summaries, search/sample filters and an expandable sample -> isolate -> antibiotic-result timeline. Patients without samples remain visible. Both record views initially show the newest additions; their order selectors also offer ID/sample-date order. Source headings omit infrastructure port numbers.
 
 Patient, culture, isolate and ward identifiers have a copy icon that appears on hover or keyboard focus (always visible on touch screens). Clicking copies only the identifier and shows a short checkmark confirmation, without opening a record or expanding a sample. The controls appear in the patient directory/timeline, source and laboratory tables, predictor source snapshots and the assistant's source context and recognized IDs in answers. Clipboard failure is reported explicitly; ordinary text selection remains available.
 
 The patient directory API supports `q`, `sex`, `has_samples=yes|no`, `limit` and `offset`. History includes complete linked culture/isolate/AST records and explicitly labelled ward-stay references. Weekly overview graphics use distinct sampled patients, culture counts and AST counts for each week; the patient total is the registered directory count across the complete dataset.
 
-The patient filter's shared sliding highlight adapts Watermelon UI's Tabs interaction. See `THIRD_PARTY_NOTICES.md` for attribution. The application-specific composition is in `apps/web/src/components/Dashboard.tsx`; patient flows in `Patients.tsx`; source discovery in `SourceDirectory.tsx`; motion primitives in `components/ui/motion.tsx`; visual styling in `design.css` with existing form/table primitives in `styles.css`.
+The patient filter's shared sliding highlight adapts Watermelon UI's Tabs interaction. See `THIRD_PARTY_NOTICES.md` for attribution. The main composition is in `apps/web/src/components/Dashboard.tsx`, patient flows in `Patients.tsx`, laboratory browsing in `App.tsx`, anomaly review in `Anomalies.tsx`, and motion primitives in `components/ui/motion.tsx`. Shared styling is in `design.css` and `readability.css`, with form/table primitives in `styles.css`.
 
 ## Excel exports and synthetic CSV imports
 
@@ -104,11 +126,11 @@ npm.cmd run demo:import -- output/data/synthetic_hospital_batch.zip
 
 The supplied synthetic batch has 50 new patients, 3 new wards, 33 ward stays, 50 cultures, 35 isolates, 82 antibiotic tests, 3 fictional antibiotics and a test-only guideline. Three specimen codes match the source catalogue. It includes patients without samples, registered samples awaiting results, negative cultures, repeat samples and multiple-isolate cultures. Sample dates are based on 2026-10-17; future batches default to the current date in Europe/Kyiv, or accept `--date YYYY-MM-DD`. Fictional drug names and S/R results are demonstration data, not clinical recommendations.
 
-The backend watches `output/data/inbox` every two seconds after startup. A ZIP must contain `manifest.json` and the nine CSV files at its root, with the exact source-field column names. New files use a paced hospital feed: **one new patient every five seconds** by default. References are created/reused first, then each patient group is registered with pending cultures. Organisms appear one tick later; reported S/R results and supplied final culture states follow on the next tick. This overlaps patient arrivals with lab progress, instead of loading all patients before any results. Cultures supplied as pending stay pending. A group can contain two patients by setting `SYNTHETIC_IMPORT_GROUP_SIZE=2`; change `SYNTHETIC_IMPORT_INTERVAL_MS=5000` for another interval. Restart the backend to apply settings to new batches. A partially imported batch retains its saved schedule and group size.
+The backend watches `output/data/inbox` every two seconds after startup. A ZIP must contain `manifest.json` and the nine CSV files at its root, with the exact source-field column names. The hospital feed registers **one new patient every 30 seconds** by default. Reference catalogues are prepared first, then patients arrive with pending cultures. Organisms appear one tick later; S/R results and supplied final report states follow on the next tick. Cultures supplied as pending stay pending. Set `SYNTHETIC_IMPORT_GROUP_SIZE=2` for pairs and `SYNTHETIC_IMPORT_INTERVAL_MS=30000` for the interval. Restart to apply the current interval to both new and unfinished batches; unfinished batches keep their original group boundaries.
 
-Every write goes through the normal source APIs, with reference validation and idempotency keys; culture counts remain maintained by isolate inserts. Hub polling and SSE update the visible counts and tables without refreshing the page. The importer never writes consolidated tables directly. The sample dates in a file describe the sample records; pacing models the arrival of those records, not new actual clinical collection times. With the default settings, a 50-patient batch takes about four minutes plus reference creation and source/API delays. It finishes when that batch is exhausted; queue another file to continue adding arrivals.
+Every generated registration and result is written to its hospital source, with reference validation and idempotency keys. That source sends FHIR changes immediately to the hub; SSE updates affected open views. The 30-second interval governs new arrivals, not delivery latency. The importer never writes the hub's clean tables. Sample dates remain the dates in the file. A 50-patient batch takes about 26 minutes including its final laboratory stages, plus source/API time. Queue another batch to continue arrivals during the same run.
 
-Progress and the next tick are saved in `data/demo-imports`. Closing the app pauses the active feed promptly; the next start resumes it without duplicate patients or replacing source corrections. Completed files are skipped and logged as already imported. A source outage retains partial writes and retries after 30 seconds. Manual `npm.cmd run demo:import -- file.zip` remains the explicit immediate-import path for maintenance; the inbox is the paced path for a running demo. The first 50 previously imported patients are retained; a fresh batch using the next available numeric IDs can demonstrate new arrivals.
+Progress and the next tick are saved in `data/demo-imports`. An unfinished feed resumes on restart. **When every ZIP currently in the inbox has completed, the next startup backs up the sources, removes only patients and linked clinical rows owned by those generated batches, resets their receipts and starts their paced feed again.** It preserves the original supplied dataset and shared catalogues; an added manual clinical record protects its generated patient's entire graph. IDs or ID ranges alone never authorize deletion. Backups and a crash-recovery plan are under `data/demo-replays`. Set `SYNTHETIC_REPLAY_ON_RESTART=false` to retain completed batches permanently. Completed batches are skipped during the same run. An unavailable source retries after 30 seconds. Manual `npm.cmd run demo:import -- file.zip` remains the immediate-import maintenance path.
 
 Generated patients use seven-digit hospital-style identifiers, starting at `1018112`. The generator reserves the next available range in a separate SQLite counter, also checking patient IDs already in ADT, so separately generated/queued batches do not reuse IDs. Culture accessions look like `MB26101811501`, isolates add a position such as `MB26101811501-1`, and ward-stay references retain explicit patient/ward/date links. The existing supplied `P...` and `C...` identifiers remain intact. Import package IDs use `BATCH-...` only in manifests and filenames; they are not patient IDs. These are still entirely synthetic records.
 
@@ -120,11 +142,11 @@ To edit a batch, use the CSVs in `output/data/synthetic_batch`, preserve headers
 
 ## Synchronization and reporting
 
-Initial snapshots read all records and the outbox high-water cursor in one SQLite read transaction. Later ingestion polls each source independently every two seconds, applying changes, storing their event payloads, and advancing the cursor in one PostgreSQL transaction. `(source, source_event_id)` is unique, so retransmissions are idempotent. A failing source retains its last committed cursor and does not prevent other sources from updating. References arriving later are resolved by the joined views automatically. Failed/malformed event batches retain their cursor and appear as a source health error; they are never silently skipped.
+The initial baseline is converted to FHIR from each private source with a captured event cursor. Source senders then push persisted FHIR messages as records change; a two-second catch-up loop recovers missed deliveries independently for each source. Intake stores the original message, checks source-scoped message/resource versions, updates clean tables and advances its cursor transactionally. Duplicate/stale resources do not create extra records. A failing source preserves recovery state; references arriving later resolve through the joined views. Rejected messages remain in the inbox with their reason. See [hospital integration](docs/hospital-integration.md) for acceptance and replay behavior.
 
-SSE tells the frontend to refetch affected data; periodic queries and reconnection refreshes also reconcile current state. Direct source views read live APIs; overview/history/reporting read the consolidated database and may lag by a polling interval. Event history starts after the bootstrap snapshot in the hub; complete seed events remain in the source outboxes.
+SSE tells the frontend to refetch affected data; periodic queries and reconnection refreshes also reconcile state. Browser reads, including source-table browsing, come from the hub's clean tables. Management writes are sent to the owning source and return through FHIR. The hub can briefly lag a source while its message is being delivered. Event history starts after the initial load; source outboxes retain their own events.
 
-The default antibiogram is the final 28 days ending at the latest sample date, clearly labelled as historical data. Calendar-year and custom-date views are also available. First-isolate selection is per patient, organism and specimen type within the selected reporting period and location scope. Selection happens before joining AST results. An antibiotic's denominator includes only selected isolates tested against that antibiotic. Percentages are suppressed below 30 tests. Pending cultures are excluded. Automatic anomaly detection is not implemented; the separate AMR predictor uses the supplied research model.
+The default antibiogram is the final 28 days ending at the latest sample date, clearly labelled as historical data. Calendar-year and custom-date views are also available. First-isolate selection is per patient, organism and specimen type within the selected reporting period and location scope. Selection happens before joining AST results. An antibiotic's denominator includes only selected isolates tested against that antibiotic. Percentages are suppressed below 30 tests. Pending cultures are excluded. The Anomalies tab separately evaluates resistance increases, resistant-organism clusters and data/integration issues using configurable research/demo rules. Its biological windows use the current UTC date and may suppress comparisons when recent matched counts are insufficient. The AMR predictor remains the supplied research model.
 
 ## AMR predictor
 
@@ -146,11 +168,23 @@ python -S -m unittest discover -s AMR/model -p test_amr_predict.py
 
 ## AI assistant and quick chat
 
+The top-bar **Language / Kieli** selector switches between **English** and **Suomi** and remembers the choice in browser local storage. Navigation, forms, tables, predictor controls, dates/numbers and chat controls use the selected language without resetting the selected patient, inputs or conversation. Translations live in `apps/web/src/locales/fi.ts`; IDs, database/API keys, Latin organism names, drug names and raw JSON are preserved. Source-provided Finnish ward names are used when available. AMR Hub branding and the patient welcome headline have been removed; TYKS and MYLAB branding remains.
+
+Chat requests send a validated `language: "en" | "fi"` preference to the API. Finnish mode instructs Ollama to answer in Finnish while preserving identifiers, results and citation URLs. Exact-ID searches work in either language; Finnish pending-result, resistance and guideline-topic terms are supported. The selected TYKS reference stays the separately attributed English summary requested for the LLM; the unchanged Finnish PDF remains available from its source links. Existing chat messages retain their original language when the interface language changes.
+
 The **AI assistant** tab opens the clinical assistant; its **AMR assistant** launcher at the bottom right shares the same conversation. The popup remains available on all other tabs, supports minimize/expand, and keeps an answer streaming while you navigate. The interface uses the dashboard's blue actions and dark text, with patient, culture and ward accents and microbiology-specific suggested questions. Four starting choices select **Patient ID**, **Culture ID**, **Ward code** or **General question**. You can also type an exact ID directly in any question, including numeric IDs and `MB...` culture/isolate accessions. Follow-ups retain the resolved scope; a different ID changes it, and New review clears it. Conversation state stays in browser memory and resets on a page refresh.
 
 The backend uses indexed, case-insensitive exact ID searches and fixed aggregate queries in the synchronized PostgreSQL hub. It never asks the LLM to generate SQL and has no embeddings, vector database or document RAG pipeline. Patient → culture → isolate → AST links supply source facts; isolate IDs are also recognized in question text. General questions receive hospital counts, specimen/organism summaries and relevant pending/antibiogram aggregates. Ward queries include sample-based counts, recent/pending samples, organisms and an antibiogram (last 28 days by default; an explicit year selects that calendar year). These are recorded sample locations, not a verified current census. Search is deliberately bounded: ask about one culture when you need detailed test results.
 
 For up to two selected patient/culture samples per question, the backend runs the same supplied Python AMR inference code used by the predictor page, with mapped source inputs and earlier final S/R history. These outputs are labelled model estimates separately from observed results. Unsupported specimens/ages/organisms and unavailable inputs are reported explicitly. Medication exposure, allergies, dosing, renal function and other absent clinical facts are not invented. Predictor-page manual edits are exploratory inputs and are not saved to the patient's source record or chatbot context. Answers support clinical review; they do not issue prescriptions or write records.
+
+The assistant also uses a separately attributed English reference from the supplied **Mikrobilääkesuositus**, dated **13 April 2026**. It was prepared by TYKS, Satasairaala and Vaasa Central Hospital infectious diseases physicians with other specialties. The bundled original PDF and English reference are in `apps/api/resources/guidelines`; a SHA-256 check ties the summary to this exact edition. The running app does not depend on the original Downloads path.
+
+`tyks-guidelines.ts` selects from 30 English reference topics through fixed question keywords and known specimen/organism fields. Every question receives the core sampling, 48–72-hour review and S/I/R explanations; up to three relevant topics are added within a 7,600-character guide budget. No embeddings, vector database, training or runtime document search is added. Patient context and model predictions remain separate. The local assistant context window is 16,384 tokens to accommodate these sources.
+
+This is a **selected English translation/summary**, with page references, rather than a full official translation. The guide has adult scope, assumes normal renal/hepatic function for its dose tables, and does not replace specialist consultation. Its page-8 susceptibility percentages are from **2021**, and its dosing interpretation table cites **EUCAST v11.0**; neither is presented as live data or a current breakpoint standard. Full dosing schedules, laboratory SOPs and numeric breakpoint tables are excluded from the English context. Missing symptoms, allergies, organ function, pregnancy, MICs and actual medication exposure remain unknown.
+
+Both chat views show **TYKS reference** in the source-context panel, with expandable English guidance and links to the original Finnish pages. Answers are instructed to cite only selected source pages and keep recommendations distinct from measured S/R and research predictions. `GET /api/assistant/guidelines/tyks` exposes the English reference for review; `GET /api/assistant/guidelines/tyks/source.pdf` serves the unchanged original. These treatment-guidance resources are separate from `formulary.guidelines`, which contains AST interpretation-edition labels.
 
 Expand the source panel under an answer to inspect matched IDs, sample counts, AMR inputs, source sync times and the complete structured context sent to Ollama. Every new question re-reads the hub. Prediction results are cached for at most 60 seconds using a hash of the complete patient history and model, so a changed source result invalidates the cache. The hub can lag source APIs by the existing polling interval, and offline source status is included. Long histories and ward lists are capped and labelled. Missing models or interrupted streams show errors while keeping the retrieved facts visible.
 
@@ -162,7 +196,7 @@ ollama pull qwen3.5:4b
 npm.cmd run dev
 ```
 
-Set `OLLAMA_URL`, `OLLAMA_MODEL` and optionally `OLLAMA_TIMEOUT_MS` in `.env` to change the connection, installed model or generation timeout, then restart the backend. Installed models are selectable in the chat header. Generation uses Ollama `/api/chat` with streaming and thinking disabled. Stop cancels the active request; unavailable models do not cause a fabricated LLM fallback. See the [Ollama chat API](https://docs.ollama.com/api/chat).
+Set `OLLAMA_URL`, `OLLAMA_MODEL` and optionally `OLLAMA_TIMEOUT_MS` in `.env` to change the connection, installed model or generation timeout, then restart the backend. The interface hides language-model names and configuration; change the installed model through the server environment. The welcome line is "Ask me anything about the ARM", with the four question-context controls retained. Generation uses Ollama `/api/chat` with streaming and thinking disabled. Stop cancels the active request; unavailable models do not cause a fabricated LLM fallback. See the [Ollama chat API](https://docs.ollama.com/api/chat).
 
 The search can also run without the LLM while the API is running:
 
@@ -173,15 +207,26 @@ npm.cmd run assistant:search -- --ward ICU --query "Any pending samples?"
 npm.cmd run assistant:search -- --query "How many samples are waiting?"
 ```
 
-Routes: `GET /api/assistant/status`, `POST /api/assistant/search` (structured context), and `POST /api/assistant/chat` (newline-delimited JSON events: phase, context, token, done/error). Bodies accept `message`, `mode`, `identifier`, prior resolved `focus`, a bounded user/assistant `history`, and an optional installed `model`. Context is always assembled on the server. The new UI is read-only; adding/correcting records continues through the existing source forms. Legacy `/api/chat`, `/api/chat/tools`, `/api/chat/models` and review/commit proposal endpoints remain available for existing integrations.
+Routes: `GET /api/assistant/status`, `POST /api/assistant/search` (structured context), and `POST /api/assistant/chat` (newline-delimited JSON events: phase, context, token, done/error). Bodies accept `message`, `mode`, `identifier`, prior resolved `focus`, a bounded user/assistant `history`, and an optional installed `model`. Context is always assembled on the server. The assistant is read-only; adding/correcting records continues through the existing source forms. Legacy `/api/chat`, `/api/chat/tools`, `/api/chat/models` and review/commit proposal endpoints remain available for existing integrations.
 
 ## Development checks
+
+The **Anomalies** tab detects resistance increases, resistant-organism clusters and
+data/integration problems from accepted FHIR changes. It provides matched-period
+counts, statistical evidence, supporting source records, English/Finnish controls
+and persistent acknowledgement/dismissal history. Detection runs in the backend;
+the chatbot receives relevant saved findings as context. See
+[anomaly detection and testing](docs/ANOMALIES.md) for rules, architecture and the
+built-in **Test with synthetic scenarios** controls. Thresholds are research/demo
+settings, not TYKS clinical policy.
 
 ```powershell
 npm.cmd run build
 npm.cmd test
 ```
 
-Backend tests create separate temporary SQLite sources on ports 18001–18003 and a uniquely named temporary PostgreSQL database. They verify snapshot/cursor consistency, append idempotency, optimistic corrections, validation, parent/child updates, first-isolate counts, minimum sample size, corrected AST results, event replay, restart recovery, source outage recovery, reviewable chatbot writes, and joined patient summaries/history. Test data does not enter the development databases. Frontend interaction tests use jsdom with mocked API data to check separate source/patient navigation, filtering, expandable patient history and patient registration. They do not substitute for visual browser checks.
+Backend tests create separate temporary SQLite sources on ports 18001–18003 and a uniquely named temporary PostgreSQL database. They verify snapshot/cursor consistency, append idempotency, optimistic corrections, validation, parent/child updates, first-isolate counts, minimum sample size, corrected AST results, event replay, restart recovery, source outage recovery, reviewable chatbot writes, and joined patient summaries/history. Test data does not enter the development databases. Frontend interaction tests use jsdom with mocked API data to check laboratory/patient navigation, filtering, expandable patient history, patient registration, assistant behavior and anomaly review. They do not substitute for visual browser checks.
+
+FHIR tests also cover all nine mappings, exact persisted message retries, duplicate and stale-resource handling, rejected inbox messages, source push, downtime catch-up, corrections, the 30-second schedule and a protected demo-reset/replay cycle. Frontend tests cover streaming chat scroll control and scoped live refresh. Scrolling up pauses chat following; **Latest response** resumes it in both the popup and full-page assistant.
 
 To view source SQLite files in VS Code, install `alexcvzz.vscode-sqlite` and run **SQLite: Open Database**. Inspect the Postgres hub with a PostgreSQL client using host `127.0.0.1`, port `55432`, database `hub_db`, user `amr_hub` for the default local configuration.

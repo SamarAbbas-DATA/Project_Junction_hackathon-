@@ -1,3 +1,4 @@
+import { t,locale } from './i18n';
 export type Row=Record<string,any>;
 export type Field={name:string;type?:'integer'|'number';required?:boolean;nullable?:boolean;values?:(string|number)[];date?:boolean};
 export type Table={source:string;name:string;label:string;keys:string[];fields:Field[];description:string};
@@ -15,8 +16,8 @@ export async function streamAssistant(body:Row,onEvent:(event:Row)=>void,signal:
     if(!finished&&!signal.aborted)throw new Error('The connection ended before the answer finished. Please retry.');
   }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
 }
-export const num=(n:number|string|undefined)=>Number(n||0).toLocaleString();
-export const label=(value:string)=>value.replaceAll('_',' ').replace(/^\w/,c=>c.toUpperCase());
+export const num=(n:number|string|undefined)=>Number(n||0).toLocaleString(locale());
+export const label=(value:string)=>t(value.replaceAll('_',' ').replace(/^\w/,c=>c.toUpperCase()));
 export const keyOf=(table:Table,row:Row)=>table.keys.map(k=>row[k]).join('~');
 export const sourceInfo:Record<string,{label:string;short:string;description:string;color:string;port:number}>={
   adt:{label:'Patient administration',short:'ADT',description:'Patient identity, wards & stays',color:'blue',port:8001},

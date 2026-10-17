@@ -1,0 +1,7 @@
+# Keep the local preview's expected Host header when forwarding the public URL.
+on_http_request:
+  - actions:
+      - type: add-headers
+        config:
+          headers:
+            host: localhost
