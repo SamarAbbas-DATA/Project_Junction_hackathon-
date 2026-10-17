@@ -1,0 +1,16 @@
+import { useQueries } from '@tanstack/react-query';
+import { motion,useReducedMotion } from 'motion/react';
+import { ArrowRight,ArrowUpRight,BookOpen,Database,FileCode2,FlaskConical,Layers3,Plus,Table2,Users } from 'lucide-react';
+import { api,num,sourceInfo,type Row,type Table } from '../api';
+
+export default function SourceDirectory({tables,sources,onTable}:{tables:Table[];sources:Row[];onTable:(source:string,table:string)=>void}){
+  const reduce=useReducedMotion();
+  const counts=useQueries({queries:tables.map(table=>({queryKey:['source-count',table.source,table.name],queryFn:()=>api(`/source/${table.source}/${table.name}?limit=1`),refetchInterval:15000}))});
+  return <div className="source-directory-page"><div className="page-actions"><span className="badge blue"><Layers3 size={13}/>{tables.length} source tables</span></div><div className="source-directory-grid">{Object.entries(sourceInfo).map(([source,info],index)=>{
+    const state=sources.find(s=>s.source===source),sourceTables=tables.filter(t=>t.source===source),Icon=source==='adt'?Users:source==='lis'?FlaskConical:BookOpen;
+    return <motion.section className={`source-system-card source-${source}`} key={source} initial={reduce?false:{opacity:0,y:15}} animate={{opacity:1,y:0}} transition={{delay:index*.08,duration:.4}}><div className="source-system-header"><span className="source-system-icon"><Icon size={25}/></span><span className={`badge ${state?.status==='connected'?'green':'amber'}`}><i className={`status-dot ${state?.status==='connected'?'green-dot':'amber-dot'}`}/>{state?.status==='connected'?'Connected':state?.status||'Connecting'}</span><span className="source-system-number">0{index+1}</span></div><div className="source-system-title"><span className="eyebrow">{source==='adt'?'PATIENT ADMINISTRATION':source==='lis'?'LABORATORY INFORMATION':'PHARMACY / REFERENCE'}</span><h2>{source==='adt'?'People & places':source==='lis'?'Samples & discoveries':'Antibiotics & guidance'}</h2><p>{source==='adt'?'Patient demographics, care locations and recorded ward stays.':source==='lis'?'Cultures, recovered organisms and antibiotic susceptibility results.':'The shared antibiotic catalogue and interpretation guideline editions.'}</p></div><div className="source-system-tables">{sourceTables.map(table=>{
+      const tableIndex=tables.indexOf(table),count=counts[tableIndex];
+      return <button key={table.name} onClick={()=>onTable(source,table.name)}><span className="source-table-icon"><Table2 size={16}/></span><span><strong>{table.label}</strong><small className="mono">{table.name}</small></span><span className="source-table-count">{count.isError?'Unavailable':count.data?num(count.data.total):'…'}<ArrowUpRight size={14}/></span></button>;
+    })}</div><div className="source-system-footer"><span><Database size={13}/>{source}_db</span><a href={`http://127.0.0.1:${info.port}/docs`} target="_blank" rel="noreferrer">API docs<ArrowUpRight size={13}/></a></div></motion.section>;
+  })}</div><div className="source-explainer"><span className="explainer-icon"><Layers3 size={23}/></span><div><h3>Information stays connected to its origin.</h3><p>Open a table to retrieve, add or correct source records. Changes are picked up automatically and linked in the central hub.</p></div></div></div>;
+}

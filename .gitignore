@@ -1,0 +1,12 @@
+node_modules/
+.npm-cache/
+*.tsbuildinfo
+data/
+dist/
+.env
+*.log
+tmp/
+output/
+.DS_Store
+__pycache__/
+*.py[cod]

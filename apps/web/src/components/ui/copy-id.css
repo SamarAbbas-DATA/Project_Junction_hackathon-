@@ -1,0 +1,14 @@
+.copy-id{display:inline-flex;align-items:center;gap:5px;max-width:100%;vertical-align:middle;line-height:inherit;font:inherit;color:inherit}
+.copy-id-value{overflow-wrap:anywhere;user-select:text;min-width:0}
+.copy-id>.copy-id-control{display:inline-flex;align-items:center;justify-content:center;position:relative;z-index:2;flex-shrink:0;width:24px;height:24px;min-height:24px;margin:-3px 0;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:#335382;opacity:0;pointer-events:none;transition:opacity .12s,background .12s;vertical-align:middle}
+.copy-id:hover>.copy-id-control,.copy-id:focus-within>.copy-id-control,.copy-id>.copy-id-control:focus-visible,.copy-id>.copy-id-control.copied,.copy-id>.copy-id-control.error{opacity:1;pointer-events:auto}
+.copy-id>.copy-id-control:hover{background:#e8effc;border-color:#c4d4ee;color:#174cba}
+.copy-id>.copy-id-control.copied{background:#e7f4ee;color:#116c50;border-color:#bddbcd}
+.copy-id>.copy-id-control.error{background:#fff0e9;color:#8e3919}
+.copy-id-feedback:empty{display:none}.copy-id-feedback:not(:empty){position:absolute;right:0;bottom:calc(100% + 6px);background:#1c2739;color:#fff;padding:5px 8px;border-radius:5px;font:500 11px/1.4 'Segoe UI',sans-serif;white-space:nowrap;box-shadow:0 2px 7px #172b4d20;pointer-events:none;z-index:10}
+.patient-list-row{position:relative;text-align:left}.patient-record-link{position:static;font:inherit;text-align:left;padding:0;letter-spacing:inherit;color:inherit}.patient-record-link:after{content:'';position:absolute;inset:0;z-index:1}.patient-list-row:has(.patient-record-link:focus-visible){outline:2px solid #245cdb;outline-offset:-2px}.patient-record-link:focus-visible{outline:none}.patient-list-row .copy-id{position:static}.patient-list-row .copy-id-control{margin-top:-3px;margin-bottom:-3px}
+.timeline-trigger{position:relative}.timeline-trigger .copy-id{font:inherit}.timeline-culture-footer .copy-id{margin-left:5px}.timeline-identifiers{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:3px}.timeline-identifiers>span:first-child{font-size:inherit}
+.assistant-source-tags .copy-id{font-size:inherit;font-weight:550}.assistant-model-context .copy-id{font-size:inherit}.assistant-markdown .copy-id{gap:3px}.assistant-markdown .copy-id-control{width:21px;height:21px;min-height:21px}.assistant-markdown .copy-id-value{font:inherit}.assistant-scope .copy-id{flex-shrink:0}
+.record-order{font-size:12px;min-height:35px;padding:7px 9px;border:1px solid #cbd4e0;border-radius:7px;background:#fff;color:#17191d;max-width:160px}.patient-filter-controls{flex-wrap:wrap}
+@media(hover:none){.copy-id>.copy-id-control{opacity:1;pointer-events:auto}}
+@media(prefers-reduced-motion:reduce){.copy-id>.copy-id-control{transition:none}}

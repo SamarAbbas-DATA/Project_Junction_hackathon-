@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AMR Predictor Demo</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --ink: #1d232b; --muted: #5f6b7a; --line: #e3e7ec;
+    --good: #1f9d55; --mid: #d98e04; --bad: #d64545; --accent: #2f6fde; --chip: #eef3fd;
+    --access: #1f9d55; --watch: #d98e04; --reserve: #d64545;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #12161c; --card: #1b2129; --ink: #e6eaef; --muted: #98a3b1; --line: #2b333d;
+            --chip: #1f2b40; --accent: #6b9cff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--ink); }
+  header { padding: 16px 20px; border-bottom: 1px solid var(--line); background: var(--card); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  header h1 { font-size: 18px; margin: 0 16px 0 0; }
+  header .sub { color: var(--muted); font-size: 13px; flex-basis: 100%; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  main { display: grid; grid-template-columns: 340px 1fr; gap: 16px; padding: 16px 20px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px 16px; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; margin: 0 0 4px; }
+  .card .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 3px; }
+  select, input { font: inherit; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); }
+  .row { display: flex; gap: 6px; align-items: end; }
+  .row > * { flex: 1; min-width: 0; }
+  .row > .narrow { flex: 0 0 64px; }
+  .list { margin: 6px 0; padding: 0; list-style: none; }
+  .list li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 8px; background: var(--chip); border-radius: 6px; margin-bottom: 4px; font-size: 13px; }
+  .list li button { padding: 0 6px; border: 0; background: none; color: var(--muted); }
+  .bars .bar-row { display: grid; grid-template-columns: minmax(120px, 210px) 1fr 52px; gap: 8px; align-items: center; margin: 4px 0; }
+  .track { height: 10px; background: var(--line); border-radius: 6px; overflow: hidden; }
+  .fill { height: 100%; border-radius: 6px; transition: width .35s ease; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+  .chip { background: var(--chip); border-radius: 999px; padding: 3px 10px; font-size: 13px; }
+  .chip b { font-variant-numeric: tabular-nums; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .two { grid-template-columns: 1fr; } }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  td.pct { width: 34%; }
+  .pctwrap { display: grid; grid-template-columns: 1fr 52px; gap: 8px; align-items: center; }
+  .delta { font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .down { color: var(--bad); } .up { color: var(--good); }
+  .aware { font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid; white-space: nowrap; }
+  .aware.Access { color: var(--access); } .aware.Watch { color: var(--watch); } .aware.Reserve { color: var(--reserve); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; padding: 2px 9px; font-size: 12px; }
+  .seg button.on.S { background: var(--good); color: #fff; } .seg button.on.R { background: var(--bad); color: #fff; }
+  .seg button.on.P { background: var(--line); }
+  .src { font-size: 11px; color: var(--muted); }
+  .src.lab { color: var(--accent); font-weight: 600; }
+  .why { border: 0; background: none; color: var(--accent); padding: 0; }
+  .flags { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+  .flags label { display: inline-flex; gap: 4px; align-items: center; margin: 0; color: var(--ink); font-size: 13px; }
+  .flags input, .nh input { width: auto; }
+  .explain .contrib { display: grid; grid-template-columns: 1fr 160px 60px; gap: 8px; align-items: center; padding: 3px 0; border-bottom: 1px dashed var(--line); }
+  .pm { position: relative; height: 10px; background: var(--line); border-radius: 5px; }
+  .pm .mid { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--muted); }
+  .pm .seg2 { position: absolute; top: 0; bottom: 0; border-radius: 5px; }
+  .note { background: var(--chip); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+  .muted { color: var(--muted); }
+  .err { color: var(--bad); }
+  .flash { animation: flash 1s ease; } @keyframes flash { from { background: rgba(214,69,69,.18); } to { background: transparent; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>🧫 AMR Predictor, live demo</h1>
+  <button class="primary" id="ex1">① Example patient</button>
+  <button id="ex2">② Same patient + history</button>
+  <button id="ex3">③ Lab: Cefazolin R + Ceftriaxone R</button>
+  <button id="reset">Reset</button>
+  <div class="sub">Logistic regression trained on 130k real isolates (Stanford ARMD, 2008–2024). Every number is <b>% chance the antibiotic works</b> for <i>this</i> patient. Decision support only, not a prescription.</div>
+</header>
+
+<main>
+  <aside>
+    <div class="card">
+      <h2>Patient &amp; sample</h2>
+      <p class="hint">Known the moment the sample is taken.</p>
+      <label>Specimen</label><select id="specimen"></select>
+      <label>Setting</label><select id="setting"></select>
+      <label>Age</label><input id="age" type="number" min="18" max="100" value="78">
+    </div>
+
+    <div class="card">
+      <h2>Patient history</h2>
+      <p class="hint">Earlier results and antibiotics. This is where most of the accuracy comes from.</p>
+      <label>Earlier lab results</label>
+      <ul class="list" id="priorList"></ul>
+      <div class="row">
+        <div><select id="prAbx"></select></div>
+        <div class="narrow"><select id="prRes"><option>R</option><option>S</option></select></div>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <div><select id="prOrg"></select></div>
+        <div class="narrow"><input id="prDays" type="number" min="1" value="30" title="days ago"></div>
+        <div class="narrow"><button id="prAdd">Add</button></div>
+      </div>
+      <label>Antibiotics taken</label>
+      <ul class="list" id="abxList"></ul>
+      <div class="row">
+        <div><select id="paDrug"></select></div>
+        <div class="narrow"><input id="paDays" type="number" min="1" value="25" title="days ago"></div>
+        <div class="narrow"><button id="paAdd">Add</button></div>
+      </div>
+      <label class="nh" style="display:flex;gap:6px;align-items:center;margin-top:10px;color:var(--ink)"><input type="checkbox" id="nh"> Nursing home visit</label>
+    </div>
+
+    <div class="card note">
+      <b>How to read a percentage</b><br>
+      "Ciprofloxacin 70%" means: out of 100 past patients <i>like this one</i>, about 70 had a bug that ciprofloxacin worked against. The model is calibrated on 2022–2024 data, so when it says 20–30% resistant, 21% actually were.
+    </div>
+  </aside>
+
+  <section>
+    <div class="card">
+      <h2>Stage 1 · Sample taken, nothing grown yet</h2>
+      <p class="hint">Which bug is it likely to be, and which antibiotic would cover it? (empiric therapy)</p>
+      <div class="two">
+        <div><b>Likely organism</b><div class="bars" id="orgBars"></div></div>
+        <div>
+          <b>Top 3 by coverage</b><div class="chips" id="empTop"></div>
+          <b>Recommended</b> <span class="muted">(narrowest WHO AWaRe group with ≥ 80%)</span><div class="chips" id="empRec"></div>
+          <div class="muted" id="empOther"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Stage 2 → 3 · Organism identified, results arriving</h2>
+      <p class="hint">Pick the organism the lab identified. Then mark results as they come back: every other percentage updates instantly.</p>
+      <div class="row">
+        <div><label>Organism</label><select id="organism"></select></div>
+      </div>
+      <div class="flags" id="flags"></div>
+      <div id="stage2">
+        <p class="muted" style="margin-top:12px">Choose an organism to see predictions.</p>
+      </div>
+    </div>
+
+    <div class="card explain" id="explainCard" style="display:none"></div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const color = p => p >= 80 ? "var(--good)" : p >= 50 ? "var(--mid)" : "var(--bad)";
+let META = null;
+const S = { history: { prior_results: [], prior_antibiotics: [], nursing_home: false }, organism: "", known: {}, flags: {},
+            prev: {}, cur: {}, explainAbx: null, changed: null };
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
+  const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j;
+}
+const opt = (v, t) => `<option value="${esc(v)}">${esc(t ?? v)}</option>`;
+const req = () => ({ specimen: $("#specimen").value, setting: $("#setting").value, age: +$("#age").value || null,
+                     history: S.history, organism: S.organism, known_results: S.known, flags: S.flags });
+
+// ---------- friendly names for model features (used in "why?")
+function friendly(f) {
+  const win = w => ({ "30d": "in last 30 days", "90d": "in last 90 days", "365d": "in last year", "ever": "ever before" }[w] || w);
+  let m;
+  if ((m = f.match(/^spec=(.*)/))) return `${m[1]} sample`;
+  if ((m = f.match(/^ward=(.*)/))) return ({ IP: "Inpatient ward", OP: "Outpatient clinic", ER: "Came through the ER", ICU: "ICU" }[m[1]] || m[1]);
+  if ((m = f.match(/^mode=(.*)/))) return `Ordered as ${m[1]}`;
+  if ((m = f.match(/^age=(.*)/))) return `Age ${m[1]}`;
+  if ((m = f.match(/^gender=(.*)/))) return `Gender code ${m[1]}`;
+  if ((m = f.match(/^R:(.*)/))) return `🧪 This sample: ${m[1]} came back RESISTANT`;
+  if ((m = f.match(/^S:(.*)/))) return `🧪 This sample: ${m[1]} came back susceptible`;
+  if ((m = f.match(/^prevRsame_(\w+):(.*)/))) return `Same bug was resistant to ${m[2]} ${win(m[1])}`;
+  if ((m = f.match(/^prevSsame_(\w+):(.*)/))) return `Same bug was susceptible to ${m[2]} ${win(m[1])}`;
+  if ((m = f.match(/^prevR_(\w+):(.*)/))) return `A ${m[2]}-resistant result ${win(m[1])}`;
+  if ((m = f.match(/^cls_(\w+):(.*)/))) return `Took a ${m[2]} antibiotic ${win(m[1])}`;
+  if ((m = f.match(/^drug_(\w+):(.*)/))) return `Took ${m[2]} ${win(m[1])}`;
+  if ((m = f.match(/^prevOrg_(\w+):(.*)/))) return `Had ${m[2]} ${win(m[1])}`;
+  if (f === "nursing_home") return "Nursing home visit";
+  if ((m = f.match(/^flag:(.*)/))) return `Lab flag: ${m[1].toUpperCase()}`;
+  return f;
+}
+
+// ---------- rendering
+function renderHistory() {
+  $("#priorList").innerHTML = S.history.prior_results.map((r, i) =>
+    `<li><span>${esc(r.antibiotic)} <b class="${r.result === "R" ? "down" : "up"}">${r.result}</b> · ${esc(r.organism)} · ${r.days_ago}d ago</span><button data-i="${i}" data-k="prior_results">✕</button></li>`).join("") || `<li class="muted">none</li>`;
+  $("#abxList").innerHTML = S.history.prior_antibiotics.map((r, i) =>
+    `<li><span>${esc(r.drug)} · ${r.days_ago}d ago</span><button data-i="${i}" data-k="prior_antibiotics">✕</button></li>`).join("") || `<li class="muted">none</li>`;
+  $("#nh").checked = !!S.history.nursing_home;
+  document.querySelectorAll(".list li button").forEach(b => b.onclick = () => { S.history[b.dataset.k].splice(+b.dataset.i, 1); renderHistory(); refresh(); });
+}
+
+function bar(label, pct, extra = "") {
+  return `<div class="bar-row"><span>${label}</span><div class="track"><div class="fill" style="width:${pct}%;background:${color(pct)}"></div></div><span class="num">${pct.toFixed(1)}%</span>${extra}</div>`;
+}
+const chip = (r, key) => `<span class="chip">${esc(r.antibiotic)} <b>${r[key].toFixed(0)}%</b> <span class="aware ${r.aware}">${r.aware || "?"}</span></span>`;
+
+function renderEmpiric(e) {
+  $("#orgBars").innerHTML = e.likely_organisms.slice(0, 5).map(o =>
+    `<div class="bar-row"><span>${esc(o.organism)}</span><div class="track"><div class="fill" style="width:${o.percent}%;background:var(--accent)"></div></div><span class="num">${o.percent.toFixed(1)}%</span></div>`).join("");
+  $("#empTop").innerHTML = e.top.map(r => chip(r, "percent_covers")).join("");
+  $("#empRec").innerHTML = e.recommended.map(r => chip(r, "percent_covers")).join("");
+  $("#empOther").textContent = e.percent_other_organism > 1 ? `${e.percent_other_organism}% chance of a rare organism the model has no resistance data for (not counted).` : "";
+}
+
+function renderResistance(out) {
+  const rows = out.ranked.map(r => {
+    const before = S.prev[r.antibiotic];
+    const d = before === undefined ? 0 : r.percent_works - before;
+    const delta = Math.abs(d) >= 1 ? `<span class="delta ${d < 0 ? "down" : "up"}">${d < 0 ? "▼" : "▲"} ${Math.abs(d).toFixed(0)} <span class="muted">(was ${before.toFixed(0)}%)</span></span>` : "";
+    const k = S.known[r.antibiotic] || "P";
+    const seg = ["P", "S", "R"].map(v => `<button class="${k === v ? "on " + v : ""}" data-abx="${esc(r.antibiotic)}" data-v="${v}">${v === "P" ? "pending" : v}</button>`).join("");
+    const flash = Math.abs(d) >= 10 ? "flash" : "";
+    return `<tr class="${flash}">
+      <td>${esc(r.antibiotic)} <span class="aware ${r.aware}">${r.aware || "?"}</span></td>
+      <td class="pct"><div class="pctwrap"><div class="track"><div class="fill" style="width:${r.percent_works}%;background:${color(r.percent_works)}"></div></div><span class="num">${r.percent_works.toFixed(1)}%</span></div>${delta}</td>
+      <td><span class="seg">${seg}</span></td>
+      <td><span class="src ${r.source}">${r.source}</span></td>
+      <td><button class="why" data-why="${esc(r.antibiotic)}">why?</button></td></tr>`;
+  }).join("");
+  $("#stage2").innerHTML = `
+    <div class="two" style="margin-top:12px">
+      <div><b>Top 3 by probability</b><div class="chips">${out.top.map(r => chip(r, "percent_works")).join("")}</div></div>
+      <div><b>Recommended</b> <span class="muted">(narrowest group ≥ 80%)</span><div class="chips">${out.recommended.map(r => chip(r, "percent_works")).join("")}</div></div>
+    </div>
+    <table><thead><tr><th>Antibiotic</th><th>% chance it works · change since last update</th><th>Lab result</th><th>Source</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="muted" style="margin-top:8px">Source: <b>model</b> = predicted · <b>lab</b> = result reported · <b>intrinsic</b> = naturally resistant · <b>rule</b> = implied by a lab flag (e.g. MRSA).</p>`;
+  document.querySelectorAll(".seg button").forEach(b => b.onclick = () => {
+    const v = b.dataset.v; if (v === "P") delete S.known[b.dataset.abx]; else S.known[b.dataset.abx] = v;
+    S.changed = b.dataset.abx; refresh(true);
+  });
+  document.querySelectorAll("[data-why]").forEach(b => b.onclick = () => { S.explainAbx = b.dataset.why; explain(); });
+}
+
+async function explain() {
+  if (!S.explainAbx || !S.organism) { $("#explainCard").style.display = "none"; return; }
+  const e = await api("/api/explain", { ...req(), antibiotic: S.explainAbx });
+  const card = $("#explainCard"); card.style.display = "block";
+  let html = `<h2>Why? ${esc(S.explainAbx)} for ${esc(S.organism)}</h2>`;
+  if (e.kind !== "logistic") { card.innerHTML = html + `<p>${esc(e.text)}</p>`; return; }
+  const max = Math.max(1, ...e.contributions.map(c => Math.abs(c[1])));
+  html += `<p class="hint">The model is a <b>logistic regression</b>: it starts from a base score for this bug + antibiotic, adds the learned weight ("risk points") of every fact that is true for this patient, then turns the total into a percentage. Positive points = more likely resistant.</p>
+    <div class="contrib"><span><b>Starting score</b> (typical ${esc(S.organism)}: ${e.start_percent_resistant}% resistant)</span><span></span><span class="num">${e.intercept.toFixed(2)}</span></div>` +
+    e.contributions.map(([f, w]) => {
+      const width = 50 * Math.abs(w) / max, left = w >= 0 ? 50 : 50 - width;
+      return `<div class="contrib"><span>${esc(friendly(f))}</span><div class="pm"><div class="mid"></div><div class="seg2" style="left:${left}%;width:${width}%;background:${w > 0 ? "var(--bad)" : "var(--good)"}"></div></div><span class="num ${w > 0 ? "down" : "up"}">${w > 0 ? "+" : ""}${w.toFixed(2)}</span></div>`;
+    }).join("") +
+    `<div class="contrib"><span><b>Total score</b> → logistic curve → <b>${e.percent_resistant}% resistant = ${e.percent_works}% works</b></span><span></span><span class="num"><b>${e.total.toFixed(2)}</b></span></div>
+    <p class="muted">Score 0 = 50%, −2 ≈ 12%, −4 ≈ 2%, +2 ≈ 88%. Overlapping facts (e.g. "in last 30 days" and "in last 90 days") share the effect between them, so a single one can show a surprising sign. The total is what counts. This antibiotic's model has ${e.n_weights} learned weights and was trained on ${e.n_train.toLocaleString()} isolates.</p>`;
+  card.innerHTML = html;
+}
+
+let timer = null;
+function refresh(keepPrev) {
+  clearTimeout(timer);
+  timer = setTimeout(async () => {
+    try {
+      const r = req();
+      const [emp, res] = await Promise.all([api("/api/empiric", r), S.organism ? api("/api/resistance", r) : null]);
+      renderEmpiric(emp);
+      if (res) {
+        if (keepPrev !== false) S.prev = { ...S.cur };
+        S.cur = Object.fromEntries(res.ranked.map(x => [x.antibiotic, x.percent_works]));
+        renderResistance(res);
+      } else { $("#stage2").innerHTML = `<p class="muted" style="margin-top:12px">Choose an organism to see predictions.</p>`; S.cur = {}; S.prev = {}; }
+      explain();
+    } catch (err) { $("#stage2").innerHTML = `<p class="err">${esc(err.message)}</p>`; }
+  }, 120);
+}
+
+// ---------- examples (the same case used in the explanation)
+const BASE = { specimen: "urine", setting: "emergency", age: 78 };
+function setPatient(p) { $("#specimen").value = p.specimen; $("#setting").value = p.setting; $("#age").value = p.age; }
+function example(withHistory) {
+  setPatient(BASE);
+  S.history = withHistory ? {
+    prior_results: [{ antibiotic: "Ciprofloxacin", organism: "Escherichia coli", result: "R", days_ago: 30 }],
+    prior_antibiotics: [{ drug: "ciprofloxacin", days_ago: 25 }], nursing_home: false } :
+    { prior_results: [], prior_antibiotics: [], nursing_home: false };
+  S.organism = "Escherichia coli"; $("#organism").value = S.organism; S.known = {}; S.flags = {}; renderFlags();
+  S.explainAbx = "Ciprofloxacin"; renderHistory(); refresh(true);
+}
+
+function renderFlags() {
+  $("#flags").innerHTML = ["mrsa", "vre", "cre", "esbl"].map(f =>
+    `<label><input type="checkbox" data-flag="${f}" ${S.flags[f] ? "checked" : ""}> ${f.toUpperCase()} flag</label>`).join("");
+  document.querySelectorAll("[data-flag]").forEach(c => c.onchange = () => { if (c.checked) S.flags[c.dataset.flag] = 1; else delete S.flags[c.dataset.flag]; refresh(true); });
+}
+
+async function init() {
+  META = await api("/api/meta");
+  $("#specimen").innerHTML = META.specimens.map(s => opt(s)).join("");
+  $("#setting").innerHTML = META.settings.map(s => opt(s)).join("");
+  $("#organism").innerHTML = opt("", "— not identified yet —") + META.organisms.map(o => opt(o)).join("");
+  $("#prOrg").innerHTML = META.organisms.map(o => opt(o)).join("");
+  $("#prAbx").innerHTML = Object.keys(META.antibiotics).sort().map(a => opt(a)).join("");
+  $("#paDrug").innerHTML = META.drugs.map(d => opt(d)).join("");
+  ["#specimen", "#setting", "#age"].forEach(id => $(id).onchange = () => refresh(true));
+  $("#organism").onchange = () => { S.organism = $("#organism").value; S.known = {}; S.prev = {}; S.cur = {}; refresh(false); };
+  $("#nh").onchange = () => { S.history.nursing_home = $("#nh").checked; refresh(true); };
+  $("#prAdd").onclick = () => { S.history.prior_results.push({ antibiotic: $("#prAbx").value, organism: $("#prOrg").value, result: $("#prRes").value, days_ago: +$("#prDays").value || 30 }); renderHistory(); refresh(true); };
+  $("#paAdd").onclick = () => { S.history.prior_antibiotics.push({ drug: $("#paDrug").value, days_ago: +$("#paDays").value || 30 }); renderHistory(); refresh(true); };
+  $("#ex1").onclick = () => example(false);
+  $("#ex2").onclick = () => example(true);
+  $("#ex3").onclick = async () => { if (!S.organism) { example(true); await new Promise(r => setTimeout(r, 500)); } S.known = { ...S.known, Cefazolin: "R", Ceftriaxone: "R" }; S.explainAbx = "Ceftazidime"; refresh(true); };
+  $("#reset").onclick = () => { S.history = { prior_results: [], prior_antibiotics: [], nursing_home: false }; S.organism = ""; $("#organism").value = ""; S.known = {}; S.flags = {}; S.explainAbx = null; S.prev = {}; S.cur = {}; renderFlags(); renderHistory(); refresh(false); };
+  $("#prAbx").value = "Ciprofloxacin"; $("#prOrg").value = "Escherichia coli";
+  renderFlags(); setPatient(BASE); renderHistory(); refresh(false);
+  // shortcuts for presenting: index.html#step1 / #step2 / #step3
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  if (location.hash === "#step1") example(false);
+  if (location.hash === "#step2") { example(false); await wait(600); $("#ex2").onclick(); }
+  if (location.hash === "#step3") { example(true); await wait(600); $("#ex3").onclick(); }
+}
+init().catch(e => document.body.insertAdjacentHTML("afterbegin", `<p class="err" style="padding:16px">Could not reach the demo server: ${esc(e.message)}. Start it with <code>python demo/server.py</code>.</p>`));
+</script>
+</body>
+</html>

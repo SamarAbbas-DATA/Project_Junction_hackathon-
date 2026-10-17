@@ -1,0 +1,28 @@
+{
+  "name": "amr-junction",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n API,WEB -c blue,green \"npm run dev -w @amr/api\" \"npm run dev -w @amr/web\"",
+    "start": "npm run start -w @amr/api",
+    "build": "npm run build -w @amr/web && npm run typecheck",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "data:export": "npm run data:export -w @amr/api && node scripts/export-excel.mjs",
+    "demo:generate": "tsx apps/api/src/data-files.ts --generate",
+    "demo:excel": "node scripts/export-excel.mjs --synthetic-only",
+    "demo:import": "tsx apps/api/src/demo-import.ts",
+    "data:rename": "tsx apps/api/src/rename-synthetic-data.ts",
+    "assistant:search": "tsx apps/api/src/assistant-search-cli.ts",
+    "db:stop": "npm run db:stop -w @amr/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "exceljs": "^4.4.0"
+  }
+}

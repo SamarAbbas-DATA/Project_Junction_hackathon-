@@ -1,0 +1,11 @@
+{
+  "archive": "../amr_model_real.zip",
+  "files": {
+    "amr_predict.py": "3a4e315fa26f0133a24385726e54b33f340efa5d73af852f864e90872610e9ec",
+    "amr_model.json": "4d023f677d2cae36320c07bc311beb5263e4e50853da85a1591bb3e08fb350e0",
+    "demo/server.py": "e4d09966a3003cc8ab7cc59bb5a3c9799ade6a198cc1f6435c4b498cee529551",
+    "demo/index.html": "f3d7c9926d52dd484bac1d10a311a341f620b958f03da971293ccfa985dea352",
+    "README.md": "f861c7ee96550d49f43e107ca367f167df1f9ab627761ec350e78bd8e7a2ed41",
+    "test_amr_predict.py": "65bd93cd5c7c3955f8adecaa864a790e9a5fa03d0fa095507cb096b1ec407ea6"
+  }
+}
